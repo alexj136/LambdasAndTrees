@@ -1,19 +1,43 @@
 module Interpreter where
 
+import Util
 import Syntax
 
-data ETree = ECons ETree ETree | ENil deriving (Show, Eq, Ord)
-
-eval :: Term -> ETree
+eval :: Term -> Result Term
 eval tm = case tm of
-    Lam _ -> error "unapplied Lam"
-    Var _ -> error "free Var"
+
+    Lam _ -> Error "Implementation error - unapplied Lam reached eval"
+
+    Var _ -> Error "Implementation error - free Var reached eval"
+
     App (Lam body) (arg) -> eval (shift (-1) 0 (sub 0 (shift 1 0 arg) body))
-    Cond gd tbr fbr -> eval (if eval gd == ENil then fbr else tbr)
-    Cons h t        -> ECons (eval h) (eval t)
-    Hd e            -> case eval e of { ECons h _ -> h ; _ -> error "bad Hd" }
-    Tl e            -> case eval e of { ECons _ t -> t ; _ -> error "bad Tl" }
-    Nil             -> ENil
+
+    App nonLam arg -> do
+        evNonLam <- eval nonLam
+        eval $ App evNonLam arg
+
+    Cond gd tbr fbr -> do
+        evGd <- eval gd
+        eval $ if evGd /= Nil then tbr else fbr
+
+    Cons h t -> do
+        evH <- eval h
+        evT <- eval t
+        return $ Cons evH evT
+
+    Hd e -> do
+        evE <- eval e
+        case evE of
+            Cons h _ -> return h
+            Nil      -> Error "< nil"
+
+    Tl e -> do
+        evE <- eval e
+        case evE of
+            Cons _ t -> return t
+            Nil      -> Error "< nil"
+
+    Nil -> return Nil
 
 sub :: Integer -> Term -> Term -> Term
 sub x arg body = let subAgain = sub x arg in case body of

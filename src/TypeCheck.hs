@@ -1,5 +1,6 @@
-module TypeCheck (check) where
+module TypeCheck where
 
+import Util
 import Syntax
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -19,13 +20,13 @@ instance Show Type where
 type Env = M.Map Integer Type
 type Constraints = S.Set (Type, Type)
 
-check :: Term -> Maybe Type
+check :: Term -> Result Type
 check tm = do
     let (_, ty, constrs) = constraints M.empty 0 tm
     unifyFn <- unify constrs
     return $ unifyFn ty
 
-unify :: Constraints -> Maybe (Type -> Type)
+unify :: Constraints -> Result (Type -> Type)
 unify constrs = if null constrs then return id else
     let (next, rest) = S.deleteFindMin constrs in case next of
 
@@ -38,11 +39,11 @@ unify constrs = if null constrs then return id else
         (TFunc a1 b1, TFunc a2 b2) -> unify $
             S.insert (a1, a2) $ S.insert (b1, b2) $ rest
 
-        _ -> Nothing
+        _ -> Error "Type error"
 
     where
 
-        handleVar :: Integer -> Type -> Constraints -> Maybe (Type -> Type)
+        handleVar :: Integer -> Type -> Constraints -> Result (Type -> Type)
         handleVar x ty rest = do
             let tySubFn = tySub x ty
             unifyRest <- unify (S.map (\(a, b) -> (tySubFn a, tySubFn b)) rest)
