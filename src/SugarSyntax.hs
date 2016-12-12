@@ -14,7 +14,18 @@ data Term
     | Hd Term
     | Tl Term
     | Nil
-    deriving (Show, Eq, Ord)
+    deriving (Eq, Ord)
+
+instance Show Term where
+    show (Lam  x m  ) = "(| " ++ x ++ " -> " ++ show m ++ ")"
+    show (Var  x    ) = x
+    show (App  m n  ) = "(" ++ show m ++ " " ++ show n ++ ")"
+    show (Cond g t f) = "if " ++ show g ++ " then " ++ show t ++ " else "
+        ++ show f ++ " end"
+    show (Cons l r  ) = "(" ++ show l ++ "." ++ show r ++ ")"
+    show (Hd t      ) = "< " ++ show t
+    show (Tl t      ) = "> " ++ show t
+    show  Nil         = "nil"
 
 desugar :: Term -> Result P.Term
 desugar = let

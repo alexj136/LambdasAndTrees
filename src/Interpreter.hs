@@ -6,15 +6,16 @@ import Syntax
 eval :: Term -> Result Term
 eval tm = case tm of
 
-    Lam _ -> Error "Implementation error - unapplied Lam reached eval"
+    Lam _ -> return tm
 
     Var _ -> Error "Implementation error - free Var reached eval"
 
     App (Lam body) (arg) -> eval (shift (-1) 0 (sub 0 (shift 1 0 arg) body))
 
-    App nonLam arg -> do
-        evNonLam <- eval nonLam
-        eval $ App evNonLam arg
+    App m n -> do
+        eM <- eval m
+        eN <- eval n
+        eval $ App eM eN
 
     Cond gd tbr fbr -> do
         evGd <- eval gd
@@ -35,7 +36,7 @@ eval tm = case tm of
         evE <- eval e
         case evE of
             Cons _ t -> return t
-            Nil      -> Error "< nil"
+            Nil      -> Error "> nil"
 
     Nil -> return Nil
 
