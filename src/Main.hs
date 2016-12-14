@@ -4,6 +4,7 @@ import Util
 import Lexer
 import Parser
 import SugarSyntax
+import Types
 import qualified Syntax as P
 import TypeCheck
 import Interpreter
@@ -32,10 +33,10 @@ runPipeline :: String -> Result P.Term
 runPipeline progText = do
     let tokens = alexScanTokens progText
     sugarAST <- parse tokens
-    pureAST  <- desugar sugarAST
-    ty       <- check pureAST
+    ty       <- check sugarAST
     if ty /= TTree then
         Error $ "Program has type '" ++ show ty ++ "'. Valid programs have "
         ++ "type '" ++ show TTree ++ "'."
-    else
+    else do
+        pureAST  <- desugar sugarAST
         eval pureAST

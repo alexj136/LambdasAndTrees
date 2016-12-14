@@ -1,12 +1,13 @@
 module SugarSyntax where
 
 import Util
+import Types
 import qualified Syntax as P
 
 import qualified Data.Map as M
 
 data Term
-    = Lam String Term
+    = Lam String (Maybe Type) Term
     | Var String
     | App Term Term
     | Cond Term Term Term
@@ -17,21 +18,23 @@ data Term
     deriving (Eq, Ord)
 
 instance Show Term where
-    show (Lam  x m  ) = "(| " ++ x ++ " -> " ++ show m ++ ")"
-    show (Var  x    ) = x
-    show (App  m n  ) = "(" ++ show m ++ " " ++ show n ++ ")"
-    show (Cond g t f) = "if " ++ show g ++ " then " ++ show t ++ " else "
+    show (Lam  x Nothing  m) = "(| " ++ x ++ " -> " ++ show m ++ ")"
+    show (Lam  x (Just t) m) = "(| " ++ x ++ ": " ++ show t ++ " -> " ++ show m
+        ++ ")"
+    show (Var  x           ) = x
+    show (App  m n         ) = "(" ++ show m ++ " " ++ show n ++ ")"
+    show (Cond g t f       ) = "if " ++ show g ++ " then " ++ show t ++ " else "
         ++ show f ++ " end"
-    show (Cons l r  ) = "(" ++ show l ++ "." ++ show r ++ ")"
-    show (Hd t      ) = "< " ++ show t
-    show (Tl t      ) = "> " ++ show t
-    show  Nil         = "nil"
+    show (Cons l r         ) = "(" ++ show l ++ "." ++ show r ++ ")"
+    show (Hd t             ) = "< " ++ show t
+    show (Tl t             ) = "> " ++ show t
+    show  Nil                = "nil"
 
 desugar :: Term -> Result P.Term
 desugar = let
     doDesugar :: M.Map String Integer -> Term -> Result P.Term
     doDesugar ns t = case t of
-        Lam name body -> do
+        Lam name ty body -> do
             pBody <- doDesugar (M.insert name 0 (M.map (+1) ns)) body
             return $ P.Lam pBody
         Var name -> case M.lookup name ns of

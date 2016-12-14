@@ -1,23 +1,12 @@
 module TypeCheck where
 
 import Util
-import Syntax
+import Types
+import SugarSyntax
 import qualified Data.Map as M
 import qualified Data.Set as S
 
-data Type = TTree | TFunc Type Type | TVar Integer deriving (Eq, Ord)
-
-instance Show Type where
-    show t = case t of
-        TTree               -> "@"
-        TVar   x            -> show x
-        TFunc  TTree   tR   -> "@ -> " ++ show tR
-        TFunc (TVar x) tR   -> show x ++ " -> " ++ show tR
-        TFunc tL    TTree   -> "(" ++ show tL ++ ") -> @"
-        TFunc tL   (TVar x) -> "(" ++ show tL ++ ") -> " ++ show x
-        TFunc tL    tR      -> "(" ++ show tL ++ ") -> (" ++ show tR ++ ")"
-
-type Env = M.Map Integer Type
+type Env = M.Map String Type
 type Constraints = S.Set (Type, Type)
 
 check :: Term -> Result Type
@@ -63,10 +52,14 @@ unify constrs = if null constrs then return id else
 constraints :: Env -> Integer -> Term -> (Integer, Type, Constraints)
 constraints env fresh tm = case tm of
 
-    Lam body -> (fresh', TFunc tyArg tyBody, constrBody)
+    Lam x Nothing body -> (fresh', TFunc tyArg tyBody, constrBody)
         where tyArg = TVar fresh
-              newEnv = M.insert 0 tyArg $ M.mapKeys (+1) env
+              newEnv = M.insert x tyArg env
               (fresh', tyBody, constrBody) = constraints newEnv (fresh + 1) body
+
+    Lam x (Just tyX) body -> (fresh', TFunc tyX tyBody, constrBody)
+        where newEnv = M.insert x tyX env
+              (fresh', tyBody, constrBody) = constraints newEnv fresh body
 
     Var x -> (fresh, env M.! x, S.empty)
 
