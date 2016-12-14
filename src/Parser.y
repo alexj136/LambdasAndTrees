@@ -36,6 +36,7 @@ import Control.Monad (liftM, ap)
     Name    { ( TK_Name     , _ , $$ ) }
     At      { ( TK_At       , _ , _  ) }
     Colon   { ( TK_Colon    , _ , _  ) }
+    Fix     { ( TK_Fix      , _ , _  ) }
     Error   { ( TK_Error    , _ , _  ) }
 %%
 
@@ -50,6 +51,7 @@ TERM
     | Tl TS                                { Tl $ tsToT $2               }
     | Nil                                  { Nil                         }
     | LParen TS RParen                     { tsToT $2                    }
+    | Fix TS                               { Fix $ tsToT $2              }
 
 TS :: { [Term] }
 TS : TERM TS { $1 : $2 } | TERM { [$1] }

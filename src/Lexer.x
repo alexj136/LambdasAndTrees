@@ -27,6 +27,7 @@ tokens :-
     ">"                    { \p s -> ( TK_Tl      , p , s ) }
     "@"                    { \p s -> ( TK_At      , p , s ) }
     ":"                    { \p s -> ( TK_Colon   , p , s ) }
+    "Y"                    { \p s -> ( TK_Fix     , p , s ) }
     $alpha [$alnum \_]*    { \p s -> ( TK_Name    , p , s ) }
     .                      { \p s -> ( TK_Error   , p , s ) }
 
@@ -46,6 +47,7 @@ data Token
     | TK_Tl
     | TK_At
     | TK_Colon
+    | TK_Fix
     | TK_Name
     | TK_Error
     deriving (Show, Eq)

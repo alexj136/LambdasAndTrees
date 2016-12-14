@@ -70,6 +70,11 @@ constraints env fresh tm = case tm of
               allConstrs = S.insert (tyFunc, TFunc tyArg tyRet)
                          $ S.union constrFunc constrArg
 
+    Fix f -> (fresh', tyFixF, allConstrs)
+        where tyFixF = TVar fresh
+              (fresh', tyF, constrF) = constraints env (fresh + 1) f
+              allConstrs = S.insert (tyF, TFunc tyFixF tyFixF) constrF
+
     Cond gd tbr fbr -> (fresh''', tyTbr, allConstrs)
         where (fresh'  , tyGd , constrGd ) = constraints env fresh   gd
               (fresh'' , tyTbr, constrTbr) = constraints env fresh'  tbr

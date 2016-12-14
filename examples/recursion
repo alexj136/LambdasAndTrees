@@ -1,0 +1,2 @@
+// An example of recursion. A sort of reverse function.
+(Y (|f.|x. if x then (nil.f (< x)) else x end)) (((((nil.nil).nil).nil).nil).nil)

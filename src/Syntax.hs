@@ -4,6 +4,7 @@ data Term
     = Lam Term
     | Var Integer
     | App Term Term
+    | Fix Term
     | Cond Term Term Term
     | Cons Term Term
     | Hd Term
@@ -12,9 +13,10 @@ data Term
     deriving (Eq, Ord)
 
 instance Show Term where
-    show (Lam  m    ) = "(| -> " ++ show m ++ ")"
+    show (Lam  m    ) = "(| . " ++ show m ++ ")"
     show (Var  x    ) = "v" ++ show x
     show (App  m n  ) = "(" ++ show m ++ " " ++ show n ++ ")"
+    show (Fix  f    ) = "(Y " ++ show f ++ ")"
     show (Cond g t f) = "if " ++ show g ++ " then " ++ show t ++ " else "
         ++ show f ++ " end"
     show (Cons l r  ) = "(" ++ show l ++ "." ++ show r ++ ")"

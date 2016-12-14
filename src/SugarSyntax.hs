@@ -10,6 +10,7 @@ data Term
     = Lam String (Maybe Type) Term
     | Var String
     | App Term Term
+    | Fix Term
     | Cond Term Term Term
     | Cons Term Term
     | Hd Term
@@ -18,11 +19,12 @@ data Term
     deriving (Eq, Ord)
 
 instance Show Term where
-    show (Lam  x Nothing  m) = "(| " ++ x ++ " -> " ++ show m ++ ")"
-    show (Lam  x (Just t) m) = "(| " ++ x ++ ": " ++ show t ++ " -> " ++ show m
+    show (Lam  x Nothing  m) = "(| " ++ x ++ " . " ++ show m ++ ")"
+    show (Lam  x (Just t) m) = "(| " ++ x ++ ": " ++ show t ++ " . " ++ show m
         ++ ")"
     show (Var  x           ) = x
     show (App  m n         ) = "(" ++ show m ++ " " ++ show n ++ ")"
+    show (Fix  f           ) = "(Y " ++ show f ++ ")"
     show (Cond g t f       ) = "if " ++ show g ++ " then " ++ show t ++ " else "
         ++ show f ++ " end"
     show (Cons l r         ) = "(" ++ show l ++ "." ++ show r ++ ")"
@@ -44,6 +46,9 @@ desugar = let
             pFunc <- doDesugar ns func
             pArg  <- doDesugar ns arg
             return $ P.App pFunc pArg
+        Fix f -> do
+            pF <- doDesugar ns f
+            return $ P.Fix pF
         Cond gd tbr fbr -> do
             pGd  <- doDesugar ns gd
             pTbr <- doDesugar ns tbr
