@@ -39,6 +39,7 @@ Test-Suite LambdasAndTrees-testsuite
   build-depends:        base >=4.9 && <4.10,
                         containers >=0.5 && <0.6,
                         array,
-                        LambdasAndTrees
+                        LambdasAndTrees,
+                        QuickCheck
   type:                 exitcode-stdio-1.0
   main-is:              TestMain.hs
