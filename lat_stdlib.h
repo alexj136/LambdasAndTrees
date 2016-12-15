@@ -13,7 +13,7 @@
 #define true (nil.nil)
 #define false nil
 
-#define and ( | a -> | b -> \
+#define and ( | a : @ . | b : @ . \
     if a then \
         if b then true else false end \
     else \
@@ -21,7 +21,7 @@
     end \
 )
 
-#define or ( | a -> | b -> \
+#define or ( | a : @ . | b : @ . \
     if a then \
         true \
     else \
@@ -29,6 +29,14 @@
     end \
 )
 
-#define not ( | a -> if a then false else a end )
+#define not ( | a : @ . if a then false else a end )
+
+// ---------------------------------
+// Let expressions
+// ---------------------------------
+
+#define let(x, exp, in) ( ( | x . in ) exp )
+
+#define letrec(x, exp, in) let(x, Y( | x . exp ), in)
 
 #endif
