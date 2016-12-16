@@ -11,7 +11,7 @@ type Constraints = S.Set (Type, Type)
 
 check :: Term -> Result Type
 check tm = do
-    let (_, ty, constrs) = constraints M.empty 0 tm
+    (_, ty, constrs) <- constraints M.empty 0 tm
     unifyFn <- unify constrs
     return $ unifyFn ty
 
@@ -49,51 +49,61 @@ unify constrs = if null constrs then return id else
             TFunc a b -> TFunc (tySub from to a) (tySub from to b)
             TTree     -> TTree
 
-constraints :: Env -> Integer -> Term -> (Integer, Type, Constraints)
+constraints :: Env -> Integer -> Term -> Result (Integer, Type, Constraints)
 constraints env fresh tm = case tm of
 
-    Lam x Nothing body -> (fresh', TFunc tyArg tyBody, constrBody)
-        where tyArg = TVar fresh
-              newEnv = M.insert x tyArg env
-              (fresh', tyBody, constrBody) = constraints newEnv (fresh + 1) body
+    Lam x Nothing body -> do
+        let tyArg = TVar fresh
+        let newEnv = M.insert x tyArg env
+        (fresh', tyBody, constrBody) <- constraints newEnv (fresh + 1) body
+        return (fresh', TFunc tyArg tyBody, constrBody)
 
-    Lam x (Just tyX) body -> (fresh', TFunc tyX tyBody, constrBody)
-        where newEnv = M.insert x tyX env
-              (fresh', tyBody, constrBody) = constraints newEnv fresh body
+    Lam x (Just tyX) body -> do
+        let newEnv = M.insert x tyX env
+        (fresh', tyBody, constrBody) <- constraints newEnv fresh body
+        return (fresh', TFunc tyX tyBody, constrBody)
 
-    Var x -> (fresh, env M.! x, S.empty)
+    Var x -> case M.lookup x env of
+        Just ty -> return (fresh, ty, S.empty)
+        Nothing -> Error $ "Unbound variable '" ++ x ++ "' found."
 
-    App func arg -> (fresh'', tyRet, allConstrs)
-        where tyRet = TVar fresh
-              (fresh'  , tyFunc, constrFunc) = constraints env (fresh + 1) func
-              (fresh'' , tyArg , constrArg ) = constraints env  fresh'     arg
-              allConstrs = S.insert (tyFunc, TFunc tyArg tyRet)
-                         $ S.union constrFunc constrArg
+    App func arg -> do
+        let tyRet = TVar fresh
+        (fresh'  , tyFunc, constrFunc) <- constraints env (fresh + 1) func
+        (fresh'' , tyArg , constrArg ) <- constraints env  fresh'     arg
+        let allConstrs = S.insert (tyFunc, TFunc tyArg tyRet)
+                $ S.union constrFunc constrArg
+        return (fresh'', tyRet, allConstrs)
 
-    Fix f -> (fresh', tyFixF, allConstrs)
-        where tyFixF = TVar fresh
-              (fresh', tyF, constrF) = constraints env (fresh + 1) f
-              allConstrs = S.insert (tyF, TFunc tyFixF tyFixF) constrF
+    Fix f -> do
+        let tyFixF = TVar fresh
+        (fresh', tyF, constrF) <- constraints env (fresh + 1) f
+        let allConstrs = S.insert (tyF, TFunc tyFixF tyFixF) constrF
+        return (fresh', tyFixF, allConstrs)
 
-    Cond gd tbr fbr -> (fresh''', tyTbr, allConstrs)
-        where (fresh'  , tyGd , constrGd ) = constraints env fresh   gd
-              (fresh'' , tyTbr, constrTbr) = constraints env fresh'  tbr
-              (fresh''', tyFbr, constrFbr) = constraints env fresh'' fbr
-              allConstrs = S.insert (tyGd , TTree)
-                         $ S.insert (tyTbr, tyFbr)
-                         $ S.unions [constrGd, constrTbr, constrFbr]
+    Cond gd tbr fbr -> do
+        (fresh'  , tyGd , constrGd ) <- constraints env fresh   gd
+        (fresh'' , tyTbr, constrTbr) <- constraints env fresh'  tbr
+        (fresh''', tyFbr, constrFbr) <- constraints env fresh'' fbr
+        let allConstrs = S.insert (tyGd , TTree)
+                $ S.insert (tyTbr, tyFbr)
+                $ S.unions [constrGd, constrTbr, constrFbr]
+        return (fresh''', tyTbr, allConstrs)
 
-    Cons l r -> (fresh'', TTree, allConstrs)
-        where (fresh' , tyL, constrL) = constraints env fresh  l
-              (fresh'', tyR, constrR) = constraints env fresh' r
-              allConstrs = S.insert (tyL, TTree)
-                         $ S.insert (tyR, TTree)
-                         $ S.union constrL constrR
+    Cons l r -> do
+        (fresh' , tyL, constrL) <- constraints env fresh  l
+        (fresh'', tyR, constrR) <- constraints env fresh' r
+        let allConstrs = S.insert (tyL, TTree)
+                $ S.insert (tyR, TTree)
+                $ S.union constrL constrR
+        return (fresh'', TTree, allConstrs)
 
-    Hd e -> (fresh', TTree, S.insert (tyE, TTree) constrE)
-        where (fresh', tyE, constrE) = constraints env fresh e
+    Hd e -> do
+        (fresh', tyE, constrE) <- constraints env fresh e
+        return (fresh', TTree, S.insert (tyE, TTree) constrE)
 
-    Tl e -> (fresh', TTree, S.insert (tyE, TTree) constrE)
-        where (fresh', tyE, constrE) = constraints env fresh e
+    Tl e -> do
+        (fresh', tyE, constrE) <- constraints env fresh e
+        return (fresh', TTree, S.insert (tyE, TTree) constrE)
 
-    Nil -> (fresh, TTree, S.empty)
+    Nil -> return (fresh, TTree, S.empty)
