@@ -2,13 +2,13 @@ module Main where
 
 import GenData
 import Types
+import qualified TestTypeCheck as TC
 
-import System.Exit
 import Test.QuickCheck
-import Data.Map (empty)
+import Test.Framework (defaultMain, Test)
 
-main :: IO ExitCode
-main = do
-    tm <- generate $ genTypeSafeTerm 5 empty TTree
-    putStrLn $ show tm
-    exitFailure
+main :: IO ()
+main = defaultMain tests
+
+tests :: [Test]
+tests = [TC.tests]

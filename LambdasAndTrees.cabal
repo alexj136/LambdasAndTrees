@@ -40,6 +40,8 @@ Test-Suite LambdasAndTrees-testsuite
                         containers >=0.5 && <0.6,
                         array,
                         LambdasAndTrees,
-                        QuickCheck
+                        QuickCheck,
+                        test-framework,
+                        test-framework-quickcheck2
   type:                 exitcode-stdio-1.0
   main-is:              TestMain.hs

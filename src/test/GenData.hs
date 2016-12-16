@@ -37,6 +37,9 @@ instance Arbitrary Term where
 arbitraryTerm :: Gen Term
 arbitraryTerm = arbitrary
 
+typeSafeTerm :: Type -> Gen Term
+typeSafeTerm = genTypeSafeTerm 5 M.empty 
+
 -- Generate a well-typed Term. Does not generate all possible well-typed terms,
 -- but is nonetheless very useful for testing the type checker.
 --
