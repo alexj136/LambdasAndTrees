@@ -4,6 +4,7 @@ import Util
 import Types
 import qualified Syntax as P
 
+import Control.Monad (liftM, liftM2, liftM3)
 import qualified Data.Map as M
 
 data Term
@@ -19,50 +20,58 @@ data Term
     deriving (Eq, Ord)
 
 instance Show Term where
-    show (Lam  x Nothing  m) = "(| " ++ x ++ " . " ++ show m ++ ")"
-    show (Lam  x (Just t) m) = "(| " ++ x ++ ": " ++ show t ++ " . " ++ show m
-        ++ ")"
-    show (Var  x           ) = x
-    show (App  m n         ) = "(" ++ show m ++ " " ++ show n ++ ")"
-    show (Fix  f           ) = "(Y " ++ show f ++ ")"
-    show (Cond g t f       ) = "if " ++ show g ++ " then " ++ show t ++ " else "
-        ++ show f ++ " end"
-    show (Cons l r         ) = "(" ++ show l ++ "." ++ show r ++ ")"
-    show (Hd t             ) = "< " ++ show t
-    show (Tl t             ) = "> " ++ show t
-    show  Nil                = "nil"
+    show = prettyPrint
 
+-- Pretty-print
+prettyPrint :: Term -> String
+prettyPrint = pp 0 where
+
+    -- Convert the indentation-level to a string
+    tab :: Integer -> String
+    tab 0 = ""
+    tab n = "    " ++ tab (n - 1)
+
+    -- pretty-print a term at a specified indentaton level
+    pp :: Integer -> Term -> String
+    pp indent term = case term of
+        Lam  x Nothing  m ->
+            "(| " ++ x ++ " . \n"
+            ++ tab (indent + 1) ++ (pp (indent + 1) m) ++ "\n"
+            ++ tab indent ++ ")"
+        Lam  x (Just t) m ->
+            "(| " ++ x ++ ": " ++ show t ++ " . \n"
+            ++ tab (indent + 1) ++ (pp (indent + 1) m) ++ "\n"
+            ++ tab indent ++ ")"
+        Var  x            -> x
+        App  m n          ->
+            "(" ++ (pp (indent + 1) m) ++ " " ++ (pp (indent + 1) n) ++ ")"
+        Fix  f            -> "(Y " ++ (pp (indent + 1) f) ++ ")"
+        Cond g t f        ->
+            "if " ++ show g ++ " then\n"
+            ++ tab (indent + 1) ++ (pp (indent + 1) t) ++ "\n"
+            ++ tab  indent      ++ "else \n"
+            ++ tab (indent + 1) ++ (pp (indent + 1) f) ++ "\n"
+            ++ tab  indent      ++ "end"
+        Cons l r          ->
+            "(" ++ (pp (indent + 1) l) ++ "." ++ (pp (indent + 1) r) ++ ")"
+        Hd t              -> "< " ++ (pp (indent + 1) t)
+        Tl t              -> "> " ++ (pp (indent + 1) t)
+        Nil               -> "nil"
+
+-- Desugar a Term. Wrapper around a worker that passes a map with name bindings.
 desugar :: Term -> Result P.Term
 desugar = let
-    doDesugar :: M.Map String Integer -> Term -> Result P.Term
-    doDesugar ns t = case t of
-        Lam name ty body -> do
-            pBody <- doDesugar (M.insert name 0 (M.map (+1) ns)) body
-            return $ P.Lam pBody
-        Var name -> case M.lookup name ns of
+    desug :: M.Map String Integer -> Term -> Result P.Term
+    desug ns t = case t of
+        Lam  n _ b -> liftM P.Lam (desug (M.insert n 0 (M.map (+1) ns)) b)
+        Var  n     -> case M.lookup n ns of
             Just x  -> return $ P.Var x
-            Nothing -> Error $ "Unbound variable '" ++ name ++ "'."
-        App func arg -> do
-            pFunc <- doDesugar ns func
-            pArg  <- doDesugar ns arg
-            return $ P.App pFunc pArg
-        Fix f -> do
-            pF <- doDesugar ns f
-            return $ P.Fix pF
-        Cond gd tbr fbr -> do
-            pGd  <- doDesugar ns gd
-            pTbr <- doDesugar ns tbr
-            pFbr <- doDesugar ns fbr
-            return $ P.Cond pGd pTbr pFbr
-        Cons l r -> do
-            pL <- doDesugar ns l
-            pR <- doDesugar ns r
-            return $ P.Cons pL pR
-        Hd t -> do
-            pT <- doDesugar ns t
-            return $ P.Hd pT
-        Tl t -> do
-            pT <- doDesugar ns t
-            return $ P.Tl pT
-        Nil -> return P.Nil
-    in doDesugar M.empty
+            Nothing -> Error $ "Unbound variable '" ++ n ++ "'."
+        App  f a   -> liftM2 P.App  (desug ns f) (desug ns a)
+        Fix  t     -> liftM  P.Fix  (desug ns t)
+        Cond g t f -> liftM3 P.Cond (desug ns g) (desug ns t) (desug ns f)
+        Cons l r   -> liftM2 P.Cons (desug ns l) (desug ns r)
+        Hd   t     -> liftM  P.Hd   (desug ns t)
+        Tl   t     -> liftM  P.Tl   (desug ns t)
+        Nil        -> return P.Nil
+    in desug M.empty
