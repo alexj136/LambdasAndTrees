@@ -12,10 +12,11 @@ import Control.Monad (liftM, ap)
 
 %monad { Result }
 %name parseTS TS
+%name parseTy TY
 
-%left app Name var Hd Tl
-%right cons Dot
-%nonassoc Bar Nil cond If Then Else End LParen RParen ulam llam Def Arrow
+%left app Name var Hd Tl Fix
+%right cons Dot Arrow At
+%nonassoc Bar Nil cond If Then Else End LParen RParen ulam llam Def
 
 %tokentype { (Token, AlexPosn, String) }
 %error     { parseError                }
