@@ -3,7 +3,7 @@ module GenData where
 import SugarSyntax
 import Types
 
-import Control.Monad (liftM, liftM2, liftM3)
+import Control.Monad (liftM, liftM2, liftM3, liftM4)
 import Test.QuickCheck
 import qualified Data.Map as M
 
@@ -23,19 +23,22 @@ genVarName = listOf $ elements $ ['a'..'z'] ++ ['A'..'Z']
 
 instance Arbitrary Term where
     arbitrary = frequency
-        [ ( 2, liftM3 Lam genVarName arbitrary arbitrary )
-        , ( 9, liftM Var genVarName                      )
-        , ( 2, liftM2 App arbitrary arbitrary            )
-        , ( 4, liftM Fix arbitrary                       )
-        , ( 1, liftM3 Cond arbitrary arbitrary arbitrary )
-        , ( 2, liftM2 Cons arbitrary arbitrary           )
-        , ( 4, liftM Hd arbitrary                        )
-        , ( 4, liftM Tl arbitrary                        )
-        , ( 9, return Nil                                )
+        [ ( 2, liftM4 Lam  nfo genVarName arbitrary arbitrary )
+        , ( 9, liftM2 Var  nfo genVarName                     )
+        , ( 2, liftM3 App  nfo arbitrary arbitrary            )
+        , ( 4, liftM2 Fix  nfo arbitrary                      )
+        , ( 1, liftM4 Cond nfo arbitrary arbitrary arbitrary  )
+        , ( 2, liftM3 Cons nfo arbitrary arbitrary            )
+        , ( 4, liftM2 Hd   nfo arbitrary                      )
+        , ( 4, liftM2 Tl   nfo arbitrary                      )
+        , ( 9, liftM  Nil  nfo                                )
         ]
 
 arbitraryTerm :: Gen Term
 arbitraryTerm = arbitrary
+
+nfo :: Gen Info
+nfo = return NoInfo
 
 typeSafeTerm :: Type -> Gen Term
 typeSafeTerm = genTypeSafeTerm 5 M.empty 
@@ -60,14 +63,14 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
 
     -- If the goal type is TTree and there are bound of this type, pick
     -- either a term from tTreeRest (see below) or one of those variables.
-    TTree     | otherwise                ->
-        (cn, liftM Var (oneof $ map return $ namesOfType TTree)) : tTreeRest
+    TTree     | otherwise                -> (cn,
+        liftM2 Var nfo (oneof $ map return $ namesOfType TTree)) : tTreeRest
 
     -- A similar logic here - if there are no variables of the goal type, don't
     -- generate a variable, but if there are, perhaps choose one.
     TFunc a r | null (namesOfType ty) -> tFuncRest a r
-    TFunc a r | otherwise             ->
-        (cn, liftM Var (oneof $ map return $ namesOfType ty)) : tFuncRest a r
+    TFunc a r | otherwise             -> (cn,
+        liftM2 Var nfo (oneof $ map return $ namesOfType ty)) : tFuncRest a r
 
     where
 
@@ -96,33 +99,34 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
     -- Possible TTree type expressions to generate, without variables
     tTreeRest :: [(Int, Gen Term)]
     tTreeRest =
-        [ ( ex, application TTree                                           )
-        --, ( 4, liftM Fix (genTypeSafeTerm env TTree)                       )
-        , ( ex, liftM3 Cond (recurse TTree) (recurse TTree) (recurse TTree) )
-        , ( ex, liftM2 Cons (recurse TTree) (recurse TTree)                 )
-        , ( eq, liftM  Tl   (recurse TTree)                                 )
-        , ( eq, liftM  Hd   (recurse TTree)                                 )
-        , ( cn, return Nil                                                  )
+        [ ( ex, application TTree                                             )
+        --, ( 4, liftM Fix (genTypeSafeTerm env TTree)                        )
+        , ( ex, liftM4 Cond nfo (recurse TTree)(recurse TTree)(recurse TTree) )
+        , ( ex, liftM3 Cons nfo (recurse TTree)(recurse TTree)                )
+        , ( eq, liftM2 Tl   nfo (recurse TTree)                               )
+        , ( eq, liftM2 Hd   nfo (recurse TTree)                               )
+        , ( cn, liftM  Nil  nfo                                               )
         ]
 
     -- Possible TFunc type expressions to generate, without variables
     tFuncRest :: Type -> Type -> [(Int, Gen Term)]
     tFuncRest argTy retTy =
-        [ ( cn, lambda argTy retTy                                    )
-        , ( ex, application ty                                        )
-        --, ( 4, liftM Fix arbitrary                                   )
-        , ( ex, liftM3 Cond (recurse TTree) (recurse ty) (recurse ty) )
+        [ ( cn, lambda argTy retTy                                        )
+        , ( ex, application ty                                            )
+        --, ( 4, liftM Fix arbitrary                                        )
+        , ( ex, liftM4 Cond nfo (recurse TTree) (recurse ty) (recurse ty) )
         ]
 
     -- Generate a lambda expression with the given argument and return type
     lambda :: Type -> Type -> Gen Term
     lambda argTy retTy = do
         x <- genVarName
-        liftM3 Lam (return x) (return $ Just argTy) (recurseWith x argTy retTy)
+        liftM4 Lam nfo (return x) (return $ Just argTy)
+            (recurseWith x argTy retTy)
 
     -- Generate an application expression with a given type. The argument type
     -- is randomly chosen.
     application :: Type -> Gen Term
     application retTy = do
         argTy <- if depth <= 1 then return TTree else arbitraryType
-        liftM2 App (recurse (TFunc argTy retTy)) (recurse argTy)
+        liftM3 App nfo (recurse (TFunc argTy retTy)) (recurse argTy)

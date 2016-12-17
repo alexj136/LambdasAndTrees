@@ -14,7 +14,7 @@ tokens :-
     $white+                ;
     \/\/.*\n               ; -- C-style single line comments
     "|"                    { \p s -> ( TK_Bar     , p , s ) }
-    "->"                   { \p s -> ( TK_Arrow , p , s ) }
+    "->"                   { \p s -> ( TK_Arrow   , p , s ) }
     "if"                   { \p s -> ( TK_If      , p , s ) }
     "then"                 { \p s -> ( TK_Then    , p , s ) }
     "else"                 { \p s -> ( TK_Else    , p , s ) }
@@ -32,7 +32,9 @@ tokens :-
     .                      { \p s -> ( TK_Error   , p , s ) }
 
 {
-data Token
+type Token = (TokenType, AlexPosn, String)
+
+data TokenType
     = TK_Bar
     | TK_Arrow
     | TK_If

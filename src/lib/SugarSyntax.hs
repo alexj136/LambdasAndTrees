@@ -8,16 +8,24 @@ import Control.Monad (liftM, liftM2, liftM3)
 import qualified Data.Map as M
 
 data Term
-    = Lam String (Maybe Type) Term
-    | Var String
-    | App Term Term
-    | Fix Term
-    | Cond Term Term Term
-    | Cons Term Term
-    | Hd Term
-    | Tl Term
-    | Nil
+    = Lam  Info String (Maybe Type) Term
+    | Var  Info String
+    | App  Info Term Term
+    | Fix  Info Term
+    | Cond Info Term Term Term
+    | Cons Info Term Term
+    | Hd   Info Term
+    | Tl   Info Term
+    | Nil  Info
     deriving (Eq, Ord)
+
+data Info = Pos PosInfo | NoInfo deriving (Show, Eq, Ord)
+data PosInfo = PosInfo
+    { startRow :: Int
+    , startCol :: Int
+    , endRow   :: Int
+    , endCol   :: Int
+    } deriving (Show, Eq, Ord)
 
 instance Show Term where
     show = prettyPrint
@@ -34,44 +42,44 @@ prettyPrint = pp 0 where
     -- pretty-print a term at a specified indentaton level
     pp :: Integer -> Term -> String
     pp indent term = case term of
-        Lam  x Nothing  m ->
+        Lam  _ x Nothing  m ->
             "(| " ++ x ++ " . \n"
             ++ tab (indent + 1) ++ (pp (indent + 1) m) ++ "\n"
             ++ tab indent ++ ")"
-        Lam  x (Just t) m ->
+        Lam  _ x (Just t) m ->
             "(| " ++ x ++ ": " ++ show t ++ " . \n"
             ++ tab (indent + 1) ++ (pp (indent + 1) m) ++ "\n"
             ++ tab indent ++ ")"
-        Var  x            -> x
-        App  m n          ->
+        Var  _ x            -> x
+        App  _ m n          ->
             "(" ++ (pp (indent + 1) m) ++ " " ++ (pp (indent + 1) n) ++ ")"
-        Fix  f            -> "(Y " ++ (pp (indent + 1) f) ++ ")"
-        Cond g t f        ->
+        Fix  _ f            -> "(Y " ++ (pp (indent + 1) f) ++ ")"
+        Cond _ g t f        ->
             "if " ++ show g ++ " then\n"
             ++ tab (indent + 1) ++ (pp (indent + 1) t) ++ "\n"
             ++ tab  indent      ++ "else \n"
             ++ tab (indent + 1) ++ (pp (indent + 1) f) ++ "\n"
             ++ tab  indent      ++ "end"
-        Cons l r          ->
+        Cons _ l r          ->
             "(" ++ (pp (indent + 1) l) ++ "." ++ (pp (indent + 1) r) ++ ")"
-        Hd t              -> "(< " ++ (pp (indent + 1) t) ++ ")"
-        Tl t              -> "(> " ++ (pp (indent + 1) t) ++ ")"
-        Nil               -> "nil"
+        Hd   _ t             -> "(< " ++ (pp (indent + 1) t) ++ ")"
+        Tl   _ t             -> "(> " ++ (pp (indent + 1) t) ++ ")"
+        Nil  _               -> "nil"
 
 -- Desugar a Term. Wrapper around a worker that passes a map with name bindings.
 desugar :: Term -> Result P.Term
 desugar = let
     desug :: M.Map String Integer -> Term -> Result P.Term
     desug ns t = case t of
-        Lam  n _ b -> liftM P.Lam (desug (M.insert n 0 (M.map (+1) ns)) b)
-        Var  n     -> case M.lookup n ns of
+        Lam  _ n _ b -> liftM P.Lam (desug (M.insert n 0 (M.map (+1) ns)) b)
+        Var  _ n     -> case M.lookup n ns of
             Just x  -> return $ P.Var x
             Nothing -> Error $ "Unbound variable '" ++ n ++ "'."
-        App  f a   -> liftM2 P.App  (desug ns f) (desug ns a)
-        Fix  t     -> liftM  P.Fix  (desug ns t)
-        Cond g t f -> liftM3 P.Cond (desug ns g) (desug ns t) (desug ns f)
-        Cons l r   -> liftM2 P.Cons (desug ns l) (desug ns r)
-        Hd   t     -> liftM  P.Hd   (desug ns t)
-        Tl   t     -> liftM  P.Tl   (desug ns t)
-        Nil        -> return P.Nil
+        App  _ f a   -> liftM2 P.App  (desug ns f) (desug ns a)
+        Fix  _ t     -> liftM  P.Fix  (desug ns t)
+        Cond _ g t f -> liftM3 P.Cond (desug ns g) (desug ns t) (desug ns f)
+        Cons _ l r   -> liftM2 P.Cons (desug ns l) (desug ns r)
+        Hd   _ t     -> liftM  P.Hd   (desug ns t)
+        Tl   _ t     -> liftM  P.Tl   (desug ns t)
+        Nil  _       -> return P.Nil
     in desug M.empty

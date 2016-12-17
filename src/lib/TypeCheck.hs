@@ -52,22 +52,22 @@ unify constrs = if null constrs then return id else
 constraints :: Env -> Integer -> Term -> Result (Integer, Type, Constraints)
 constraints env fresh tm = case tm of
 
-    Lam x Nothing body -> do
+    Lam _ x Nothing body -> do
         let tyArg = TVar fresh
         let newEnv = M.insert x tyArg env
         (fresh', tyBody, constrBody) <- constraints newEnv (fresh + 1) body
         return (fresh', TFunc tyArg tyBody, constrBody)
 
-    Lam x (Just tyX) body -> do
+    Lam _ x (Just tyX) body -> do
         let newEnv = M.insert x tyX env
         (fresh', tyBody, constrBody) <- constraints newEnv fresh body
         return (fresh', TFunc tyX tyBody, constrBody)
 
-    Var x -> case M.lookup x env of
+    Var _ x -> case M.lookup x env of
         Just ty -> return (fresh, ty, S.empty)
         Nothing -> Error $ "Unbound variable '" ++ x ++ "' found."
 
-    App func arg -> do
+    App _ func arg -> do
         let tyRet = TVar fresh
         (fresh'  , tyFunc, constrFunc) <- constraints env (fresh + 1) func
         (fresh'' , tyArg , constrArg ) <- constraints env  fresh'     arg
@@ -75,13 +75,13 @@ constraints env fresh tm = case tm of
                 $ S.union constrFunc constrArg
         return (fresh'', tyRet, allConstrs)
 
-    Fix f -> do
+    Fix _ f -> do
         let tyFixF = TVar fresh
         (fresh', tyF, constrF) <- constraints env (fresh + 1) f
         let allConstrs = S.insert (tyF, TFunc tyFixF tyFixF) constrF
         return (fresh', tyFixF, allConstrs)
 
-    Cond gd tbr fbr -> do
+    Cond _ gd tbr fbr -> do
         (fresh'  , tyGd , constrGd ) <- constraints env fresh   gd
         (fresh'' , tyTbr, constrTbr) <- constraints env fresh'  tbr
         (fresh''', tyFbr, constrFbr) <- constraints env fresh'' fbr
@@ -90,7 +90,7 @@ constraints env fresh tm = case tm of
                 $ S.unions [constrGd, constrTbr, constrFbr]
         return (fresh''', tyTbr, allConstrs)
 
-    Cons l r -> do
+    Cons _ l r -> do
         (fresh' , tyL, constrL) <- constraints env fresh  l
         (fresh'', tyR, constrR) <- constraints env fresh' r
         let allConstrs = S.insert (tyL, TTree)
@@ -98,12 +98,12 @@ constraints env fresh tm = case tm of
                 $ S.union constrL constrR
         return (fresh'', TTree, allConstrs)
 
-    Hd e -> do
+    Hd _ e -> do
         (fresh', tyE, constrE) <- constraints env fresh e
         return (fresh', TTree, S.insert (tyE, TTree) constrE)
 
-    Tl e -> do
+    Tl _ e -> do
         (fresh', tyE, constrE) <- constraints env fresh e
         return (fresh', TTree, S.insert (tyE, TTree) constrE)
 
-    Nil -> return (fresh, TTree, S.empty)
+    Nil _ -> return (fresh, TTree, S.empty)
