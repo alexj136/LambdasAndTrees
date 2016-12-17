@@ -54,8 +54,8 @@ prettyPrint = pp 0 where
             ++ tab  indent      ++ "end"
         Cons l r          ->
             "(" ++ (pp (indent + 1) l) ++ "." ++ (pp (indent + 1) r) ++ ")"
-        Hd t              -> "< " ++ (pp (indent + 1) t)
-        Tl t              -> "> " ++ (pp (indent + 1) t)
+        Hd t              -> "(< " ++ (pp (indent + 1) t) ++ ")"
+        Tl t              -> "(> " ++ (pp (indent + 1) t) ++ ")"
         Nil               -> "nil"
 
 -- Desugar a Term. Wrapper around a worker that passes a map with name bindings.
