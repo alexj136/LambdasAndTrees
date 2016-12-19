@@ -7,7 +7,15 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 
 type Env = M.Map String Type
-type Constraints = S.Set (Type, Type)
+
+type Constraints = S.Set Constraint
+
+-- A constraint also carries a Term, which is the source origin of the
+-- constraint, used for error messages
+newtype Constraint = Constraint (Type, Type, Term) deriving (Show, Ord)
+
+instance Eq Constraint where
+    Constraint (a, b, _) == Constraint (c, d, _) = (a, b) == (c, d)
 
 check :: Term -> Result Type
 check tm = do
@@ -19,35 +27,39 @@ unify :: Constraints -> Result (Type -> Type)
 unify constrs = if null constrs then return id else
     let (next, rest) = S.deleteFindMin constrs in case next of
 
-        (ty1, ty2) | ty1 == ty2 -> unify rest
+        Constraint (ty1, ty2, _) | ty1 == ty2 -> unify rest
 
-        (TVar x, ty) | not $ occurs x ty -> handleVar x ty rest
+        Constraint (TVar x, ty, _) | not $ occurs x ty -> handleVar x ty rest
 
-        (ty, TVar x) | not $ occurs x ty -> handleVar x ty rest
+        Constraint (ty, TVar x, _) | not $ occurs x ty -> handleVar x ty rest
 
-        (TFunc a1 b1, TFunc a2 b2) -> unify $
-            S.insert (a1, a2) $ S.insert (b1, b2) $ rest
+        Constraint (TFunc a1 b1, TFunc a2 b2, tm) -> unify $
+            S.insert (Constraint (a1, a2, tm)) $
+            S.insert (Constraint (b1, b2, tm)) $ rest
 
-        _ -> Error "Type error"
+        Constraint (ty1, ty2, tm) -> Error $ "Type error in" ++ show tm
 
     where
 
         handleVar :: Integer -> Type -> Constraints -> Result (Type -> Type)
         handleVar x ty rest = do
-            let tySubFn = tySub x ty
-            unifyRest <- unify (S.map (\(a, b) -> (tySubFn a, tySubFn b)) rest)
-            return $ unifyRest . tySubFn
+            unifyRest <- unify (S.map (constrSub x ty) rest)
+            return $ unifyRest . (tySub x ty)
 
-        occurs :: Integer -> Type -> Bool
-        occurs x (TVar  y  ) = x == y
-        occurs x (TFunc a b) = occurs x a || occurs x b
-        occurs x  TTree      = False
+        constrSub :: Integer -> Type -> Constraint -> Constraint
+        constrSub x ty (Constraint (t1, t2, tm)) =
+            Constraint (tySub x ty t1, tySub x ty t2, tm)
 
         tySub :: Integer -> Type -> Type -> Type
         tySub from to within = case within of
             TVar  x   -> if x == from then to else TVar x
             TFunc a b -> TFunc (tySub from to a) (tySub from to b)
             TTree     -> TTree
+
+        occurs :: Integer -> Type -> Bool
+        occurs x (TVar  y  ) = x == y
+        occurs x (TFunc a b) = occurs x a || occurs x b
+        occurs x  TTree      = False
 
 constraints :: Env -> Integer -> Term -> Result (Integer, Type, Constraints)
 constraints env fresh tm = case tm of
@@ -71,39 +83,39 @@ constraints env fresh tm = case tm of
         let tyRet = TVar fresh
         (fresh'  , tyFunc, constrFunc) <- constraints env (fresh + 1) func
         (fresh'' , tyArg , constrArg ) <- constraints env  fresh'     arg
-        let allConstrs = S.insert (tyFunc, TFunc tyArg tyRet)
+        let allConstrs = S.insert (Constraint (tyFunc, TFunc tyArg tyRet, tm))
                 $ S.union constrFunc constrArg
         return (fresh'', tyRet, allConstrs)
 
     Fix _ f -> do
         let tyFixF = TVar fresh
         (fresh', tyF, constrF) <- constraints env (fresh + 1) f
-        let allConstrs = S.insert (tyF, TFunc tyFixF tyFixF) constrF
+        let allConstrs = S.insert (Constraint (tyF, TFunc tyFixF tyFixF, f)) constrF
         return (fresh', tyFixF, allConstrs)
 
     Cond _ gd tbr fbr -> do
         (fresh'  , tyGd , constrGd ) <- constraints env fresh   gd
         (fresh'' , tyTbr, constrTbr) <- constraints env fresh'  tbr
         (fresh''', tyFbr, constrFbr) <- constraints env fresh'' fbr
-        let allConstrs = S.insert (tyGd , TTree)
-                $ S.insert (tyTbr, tyFbr)
+        let allConstrs = S.insert (Constraint (tyGd , TTree, gd))
+                $ S.insert (Constraint (tyTbr, tyFbr, tm))
                 $ S.unions [constrGd, constrTbr, constrFbr]
         return (fresh''', tyTbr, allConstrs)
 
     Cons _ l r -> do
         (fresh' , tyL, constrL) <- constraints env fresh  l
         (fresh'', tyR, constrR) <- constraints env fresh' r
-        let allConstrs = S.insert (tyL, TTree)
-                $ S.insert (tyR, TTree)
+        let allConstrs = S.insert (Constraint (tyL, TTree, l))
+                $ S.insert (Constraint (tyR, TTree, r))
                 $ S.union constrL constrR
         return (fresh'', TTree, allConstrs)
 
     Hd _ e -> do
         (fresh', tyE, constrE) <- constraints env fresh e
-        return (fresh', TTree, S.insert (tyE, TTree) constrE)
+        return (fresh', TTree, S.insert (Constraint (tyE, TTree, e)) constrE)
 
     Tl _ e -> do
         (fresh', tyE, constrE) <- constraints env fresh e
-        return (fresh', TTree, S.insert (tyE, TTree) constrE)
+        return (fresh', TTree, S.insert (Constraint (tyE, TTree, e)) constrE)
 
     Nil _ -> return (fresh, TTree, S.empty)

@@ -1,5 +1,7 @@
 {
 module Lexer where
+
+import Util
 }
 
 %wrapper "posn"
@@ -13,26 +15,29 @@ $alnum = [$alpha $digit]
 tokens :-
     $white+                ;
     \/\/.*\n               ; -- C-style single line comments
-    "|"                    { \p s -> ( TK_Bar     , p , s ) }
-    "->"                   { \p s -> ( TK_Arrow   , p , s ) }
-    "if"                   { \p s -> ( TK_If      , p , s ) }
-    "then"                 { \p s -> ( TK_Then    , p , s ) }
-    "else"                 { \p s -> ( TK_Else    , p , s ) }
-    "end"                  { \p s -> ( TK_End     , p , s ) }
-    "("                    { \p s -> ( TK_LParen  , p , s ) }
-    ")"                    { \p s -> ( TK_RParen  , p , s ) }
-    "."                    { \p s -> ( TK_Dot     , p , s ) }
-    "nil"                  { \p s -> ( TK_Nil     , p , s ) }
-    "<"                    { \p s -> ( TK_Hd      , p , s ) }
-    ">"                    { \p s -> ( TK_Tl      , p , s ) }
-    "@"                    { \p s -> ( TK_At      , p , s ) }
-    ":"                    { \p s -> ( TK_Colon   , p , s ) }
-    "Y"                    { \p s -> ( TK_Fix     , p , s ) }
-    $alpha [$alnum \_]*    { \p s -> ( TK_Name    , p , s ) }
-    .                      { \p s -> ( TK_Error   , p , s ) }
+    "|"                    { \p s -> Token ( TK_Bar     , p , s ) }
+    "->"                   { \p s -> Token ( TK_Arrow   , p , s ) }
+    "if"                   { \p s -> Token ( TK_If      , p , s ) }
+    "then"                 { \p s -> Token ( TK_Then    , p , s ) }
+    "else"                 { \p s -> Token ( TK_Else    , p , s ) }
+    "end"                  { \p s -> Token ( TK_End     , p , s ) }
+    "("                    { \p s -> Token ( TK_LParen  , p , s ) }
+    ")"                    { \p s -> Token ( TK_RParen  , p , s ) }
+    "."                    { \p s -> Token ( TK_Dot     , p , s ) }
+    "nil"                  { \p s -> Token ( TK_Nil     , p , s ) }
+    "<"                    { \p s -> Token ( TK_Hd      , p , s ) }
+    ">"                    { \p s -> Token ( TK_Tl      , p , s ) }
+    "@"                    { \p s -> Token ( TK_At      , p , s ) }
+    ":"                    { \p s -> Token ( TK_Colon   , p , s ) }
+    "Y"                    { \p s -> Token ( TK_Fix     , p , s ) }
+    $alpha [$alnum \_]*    { \p s -> Token ( TK_Name    , p , s ) }
+    .                      { \p s -> Token ( TK_Error   , p , s ) }
 
 {
-type Token = (TokenType, AlexPosn, String)
+newtype Token = Token (TokenType, AlexPosn, String)
+
+instance Positionable Token where
+    getPos (Token (_, AlexPn _ r c, s)) = Just $ Pos r c r (r + length s)
 
 data TokenType
     = TK_Bar

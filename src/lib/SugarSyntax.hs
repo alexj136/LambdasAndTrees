@@ -19,13 +19,27 @@ data Term
     | Nil  Info
     deriving (Eq, Ord)
 
-data Info = Pos PosInfo | NoInfo deriving (Show, Eq, Ord)
-data PosInfo = PosInfo
-    { startRow :: Int
-    , startCol :: Int
-    , endRow   :: Int
-    , endCol   :: Int
-    } deriving (Show, Eq, Ord)
+data Info = PosInfo Pos | NoInfo deriving (Eq, Ord)
+
+instance Show Info where
+    show NoInfo      = "-"
+    show (PosInfo i) = show i
+
+instance Positionable Term where
+    getPos tm = case tm of
+        Lam  (PosInfo pos) _ _ _ -> Just pos
+        Var  (PosInfo pos) _     -> Just pos
+        App  (PosInfo pos) _ _   -> Just pos
+        Fix  (PosInfo pos) _     -> Just pos
+        Cond (PosInfo pos) _ _ _ -> Just pos
+        Cons (PosInfo pos) _ _   -> Just pos
+        Hd   (PosInfo pos) _     -> Just pos
+        Tl   (PosInfo pos) _     -> Just pos
+        Nil  (PosInfo pos)       -> Just pos
+        _ -> Nothing
+
+infoFromPositionable :: Positionable a => a -> Info
+infoFromPositionable = maybe NoInfo PosInfo . getPos
 
 instance Show Term where
     show = prettyPrint
@@ -37,34 +51,58 @@ prettyPrint = pp 0 where
     -- Convert the indentation-level to a string
     tab :: Integer -> String
     tab 0 = ""
-    tab n = "    " ++ tab (n - 1)
+    tab n = "  " ++ tab (n - 1)
 
     -- pretty-print a term at a specified indentaton level
     pp :: Integer -> Term -> String
     pp indent term = case term of
-        Lam  _ x Nothing  m ->
-            "(| " ++ x ++ " . \n"
-            ++ tab (indent + 1) ++ (pp (indent + 1) m) ++ "\n"
-            ++ tab indent ++ ")"
-        Lam  _ x (Just t) m ->
-            "(| " ++ x ++ ": " ++ show t ++ " . \n"
-            ++ tab (indent + 1) ++ (pp (indent + 1) m) ++ "\n"
-            ++ tab indent ++ ")"
-        Var  _ x            -> x
-        App  _ m n          ->
-            "(" ++ (pp (indent + 1) m) ++ " " ++ (pp (indent + 1) n) ++ ")"
-        Fix  _ f            -> "(Y " ++ (pp (indent + 1) f) ++ ")"
-        Cond _ g t f        ->
-            "if " ++ show g ++ " then\n"
-            ++ tab (indent + 1) ++ (pp (indent + 1) t) ++ "\n"
-            ++ tab  indent      ++ "else \n"
-            ++ tab (indent + 1) ++ (pp (indent + 1) f) ++ "\n"
-            ++ tab  indent      ++ "end"
-        Cons _ l r          ->
-            "(" ++ (pp (indent + 1) l) ++ "." ++ (pp (indent + 1) r) ++ ")"
-        Hd   _ t             -> "(< " ++ (pp (indent + 1) t) ++ ")"
-        Tl   _ t             -> "(> " ++ (pp (indent + 1) t) ++ ")"
-        Nil  _               -> "nil"
+        Lam  i x Nothing  m ->
+            "\n" ++ tab indent ++ "| LAMBDA " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| BINDER = " ++ x
+            ++ "\n" ++ tab (indent + 1) ++ "| BODY   = "
+            ++ pp (indent + 2) m
+        Lam  i x (Just t) m ->
+            "\n" ++ tab indent ++ "| LAMBDA " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| BINDER = " ++ x
+            ++ "\n" ++ tab (indent + 1) ++ "| TYPE   = " ++ show t
+            ++ "\n" ++ tab (indent + 1) ++ "| BODY   = "
+            ++ pp (indent + 2) m
+        Var  i x            ->
+            "\n" ++ tab indent ++ "| VARIABLE " ++ x ++ " " ++ show i
+        App  i m n          ->
+            "\n" ++ tab indent ++ "| APPLICATION " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| FUNCTION = "
+            ++ pp (indent + 2) m
+            ++ "\n" ++ tab (indent + 1) ++ "| ARGUMENT = "
+            ++ pp (indent + 2) n
+        Fix  i f            ->
+            "\n" ++ tab indent ++ "| Y-COMBINATOR " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| ARGUMENT = "
+            ++ pp (indent + 2) f
+        Cond i g t f        ->
+            "\n" ++ tab indent ++ "| CONDITIONAL " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| GUARD       = "
+            ++ pp (indent + 2) g
+            ++ "\n" ++ tab (indent + 1) ++ "| TRUEBRANCH  = "
+            ++ pp (indent + 2) t
+            ++ "\n" ++ tab (indent + 1) ++ "| FALSEBRANCH = "
+            ++ pp (indent + 2) f
+        Cons i l r          ->
+            "\n" ++ tab indent ++ "| CONS " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| LEFT  = "
+            ++ pp (indent + 2) l
+            ++ "\n" ++ tab (indent + 1) ++ "| RIGHT = "
+            ++ pp (indent + 2) r
+        Hd   i t             ->
+            "\n" ++ tab indent ++ "| HEAD " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| ARGUMENT = "
+            ++ pp (indent + 2) t
+        Tl   i t             ->
+            "\n" ++ tab indent ++ "| TAIL " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| ARGUMENT = "
+            ++ pp (indent + 2) t
+        Nil  i               ->
+            "\n" ++ tab indent ++ "| NIL " ++ show i
 
 -- Desugar a Term. Wrapper around a worker that passes a map with name bindings.
 desugar :: Term -> Result P.Term

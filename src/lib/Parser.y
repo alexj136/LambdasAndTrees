@@ -6,6 +6,7 @@ import Lexer
 import SugarSyntax
 import Types
 
+import Prelude hiding (span)
 import qualified Data.Map as M
 import Control.Monad (liftM, ap)
 }
@@ -22,23 +23,23 @@ import Control.Monad (liftM, ap)
 %error     { parseError }
 
 %token
-    Bar     { ( TK_Bar      , _ , _ ) }
-    Arrow   { ( TK_Arrow    , _ , _ ) }
-    If      { ( TK_If       , _ , _ ) }
-    Then    { ( TK_Then     , _ , _ ) }
-    Else    { ( TK_Else     , _ , _ ) }
-    End     { ( TK_End      , _ , _ ) }
-    LParen  { ( TK_LParen   , _ , _ ) }
-    RParen  { ( TK_RParen   , _ , _ ) }
-    Dot     { ( TK_Dot      , _ , _ ) }
-    Nil     { ( TK_Nil      , _ , _ ) }
-    Hd      { ( TK_Hd       , _ , _ ) }
-    Tl      { ( TK_Tl       , _ , _ ) }
-    Name    { ( TK_Name     , _ , _ ) }
-    At      { ( TK_At       , _ , _ ) }
-    Colon   { ( TK_Colon    , _ , _ ) }
-    Fix     { ( TK_Fix      , _ , _ ) }
-    Error   { ( TK_Error    , _ , _ ) }
+    Bar     { Token ( TK_Bar      , _ , _ ) }
+    Arrow   { Token ( TK_Arrow    , _ , _ ) }
+    If      { Token ( TK_If       , _ , _ ) }
+    Then    { Token ( TK_Then     , _ , _ ) }
+    Else    { Token ( TK_Else     , _ , _ ) }
+    End     { Token ( TK_End      , _ , _ ) }
+    LParen  { Token ( TK_LParen   , _ , _ ) }
+    RParen  { Token ( TK_RParen   , _ , _ ) }
+    Dot     { Token ( TK_Dot      , _ , _ ) }
+    Nil     { Token ( TK_Nil      , _ , _ ) }
+    Hd      { Token ( TK_Hd       , _ , _ ) }
+    Tl      { Token ( TK_Tl       , _ , _ ) }
+    Name    { Token ( TK_Name     , _ , _ ) }
+    At      { Token ( TK_At       , _ , _ ) }
+    Colon   { Token ( TK_Colon    , _ , _ ) }
+    Fix     { Token ( TK_Fix      , _ , _ ) }
+    Error   { Token ( TK_Error    , _ , _ ) }
 %%
 
 TERM :: { Term }
@@ -67,51 +68,55 @@ TY
 parse :: [Token] -> Result Term
 parse = (fmap tsToT) . parseTS
 
-tsToT :: [Term] -> Term
-tsToT [ ] = error "tsToT of []"
-tsToT [t] = t
-tsToT ts  = App undefined (tsToT (init ts)) (last ts)
-
 parseError :: [Token] -> Result a
 parseError tokens = Error $ case tokens of
     []                          -> "Reached end of file while parsing"
-    ((_, AlexPn _ y x, s):rest) ->
-        "Parse error on line " ++ show y ++ ", column " ++ show x ++ ": "
+    (Token (_, AlexPn _ r c, s):rest) ->
+        "Parse error on line " ++ show r ++ ", column " ++ show c ++ ": "
         ++ "'" ++ s ++ "'"
 
---------------------------------
---  TERM Production Handlers  --
---------------------------------
+--------------------------------------------------------------------
+--  TERM Production Handlers - thread position info through terms --
+--------------------------------------------------------------------
 
 lamU :: Token -> Token -> Token -> [Term] -> Term
-lamU barTk (_, _, name) dotTk body = Lam undefined name Nothing (tsToT body)
+lamU barTk (Token (_, _, name)) dotTk body =
+    Lam (maybe NoInfo PosInfo (barTk `span` body)) name Nothing (tsToT body)
 
 lamT :: Token -> Token -> Token -> Type -> Token -> [Term] -> Term
-lamT barTk (_ ,_ ,name) colonTk ty dotTk body =
-    Lam undefined name (Just ty) (tsToT body)
+lamT barTk (Token (_ ,_ ,name)) colonTk ty dotTk body =
+    Lam (maybe NoInfo PosInfo (barTk `span` body)) name (Just ty) (tsToT body)
 
 var :: Token -> Term
-var (_, _, name) = Var undefined name
+var varTk@(Token (_, (AlexPn _ r c), name)) =
+    Var (PosInfo (Pos r c r (c + length name))) name
 
 cond :: Token -> [Term] -> Token -> [Term] -> Token -> [Term] -> Token -> Term
 cond ifTk gd thenTk tbr elseTk fbr endTk =
-    Cond undefined (tsToT gd) (tsToT tbr) (tsToT fbr)
+    Cond (maybe NoInfo PosInfo (ifTk `span` endTk))
+        (tsToT gd) (tsToT tbr) (tsToT fbr)
 
 cons :: Token -> [Term] -> Token -> [Term] -> Token -> Term
-cons lpTk l dotTk r rpTk = Cons undefined (tsToT l) (tsToT r)
+cons lpTk l dotTk r rpTk =
+    Cons (maybe NoInfo PosInfo (lpTk `span` rpTk)) (tsToT l) (tsToT r)
 
 hd :: Token -> [Term] -> Term
-hd hdTk body = Hd undefined (tsToT body)
+hd hdTk body = Hd (maybe NoInfo PosInfo (hdTk `span` body)) (tsToT body)
 
 tl :: Token -> [Term] -> Term
-tl tlTk body = Tl undefined (tsToT body)
+tl tlTk body = Tl (maybe NoInfo PosInfo (tlTk `span` body)) (tsToT body)
 
 nil :: Token -> Term
-nil nilTk = Nil undefined
+nil (Token (_, AlexPn _ r c, s)) = Nil $ PosInfo $ Pos r c r (c + length s)
 
 parens :: Token -> [Term] -> Token -> Term
 parens lpTk body rpTk = tsToT body
 
 fix :: Token -> [Term] -> Term
-fix fixTk body = Fix undefined (tsToT body)
+fix fixTk body = Fix (maybe NoInfo PosInfo (fixTk `span` body)) (tsToT body)
+
+tsToT :: [Term] -> Term
+tsToT [ ] = error "tsToT of []"
+tsToT [t] = t
+tsToT ts  = App (maybe NoInfo PosInfo (getPos ts)) (tsToT (init ts)) (last ts)
 }
