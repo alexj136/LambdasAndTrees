@@ -3,6 +3,8 @@ module TypeCheck where
 import Util
 import Types
 import SugarSyntax
+
+import Data.Maybe (fromMaybe)
 import qualified Data.Map as M
 import qualified Data.Set as S
 
@@ -37,7 +39,9 @@ unify constrs = if null constrs then return id else
             S.insert (Constraint (a1, a2, tm)) $
             S.insert (Constraint (b1, b2, tm)) $ rest
 
-        Constraint (ty1, ty2, tm) -> Error $ "Type error in" ++ show tm
+        Constraint (ty1, ty2, tm) -> Error $ "Unsatisfiable type constraint at "
+            ++ (fromMaybe "[NO POSITION DATA]" (fmap show (getPos tm)))
+            ++ "\nin expression:\n" ++ show tm
 
     where
 

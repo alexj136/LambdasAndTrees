@@ -44,16 +44,41 @@ infoFromPositionable = maybe NoInfo PosInfo . getPos
 instance Show Term where
     show = prettyPrint
 
--- Pretty-print
+-- Convert the indentation-level to a string
+tab :: Integer -> String
+tab 0 = ""
+tab n = "  " ++ tab (n - 1)
+
 prettyPrint :: Term -> String
 prettyPrint = pp 0 where
+    pp :: Integer -> Term -> String
+    pp indent term = case term of
+        Lam  _ x Nothing  m ->
+            "(| " ++ x ++ " . \n"
+            ++ tab (indent + 1) ++ (pp (indent + 1) m) ++ "\n"
+            ++ tab indent ++ ")"
+        Lam  _ x (Just t) m ->
+            "(| " ++ x ++ ": " ++ show t ++ " . \n"
+            ++ tab (indent + 1) ++ (pp (indent + 1) m) ++ "\n"
+            ++ tab indent ++ ")"
+        Var  _ x            -> x
+        App  _ m n          ->
+            "(" ++ (pp (indent + 1) m) ++ " " ++ (pp (indent + 1) n) ++ ")"
+        Fix  _ f            -> "(Y " ++ (pp (indent + 1) f) ++ ")"
+        Cond _ g t f        ->
+            "if " ++ show g ++ " then\n"
+            ++ tab (indent + 1) ++ (pp (indent + 1) t) ++ "\n"
+            ++ tab  indent      ++ "else \n"
+            ++ tab (indent + 1) ++ (pp (indent + 1) f) ++ "\n"
+            ++ tab  indent      ++ "end"
+        Cons _ l r          ->
+            "(" ++ (pp (indent + 1) l) ++ "." ++ (pp (indent + 1) r) ++ ")"
+        Hd   _ t            -> "(< " ++ (pp (indent + 1) t) ++ ")"
+        Tl   _ t            -> "(> " ++ (pp (indent + 1) t) ++ ")"
+        Nil  _              -> "nil"
 
-    -- Convert the indentation-level to a string
-    tab :: Integer -> String
-    tab 0 = ""
-    tab n = "  " ++ tab (n - 1)
-
-    -- pretty-print a term at a specified indentaton level
+debugPrint :: Term -> String
+debugPrint = pp 0 where
     pp :: Integer -> Term -> String
     pp indent term = case term of
         Lam  i x Nothing  m ->
