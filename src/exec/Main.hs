@@ -8,6 +8,7 @@ import Types
 import qualified DeBruijnSyntax as P
 import TypeCheck
 import Interpreter
+import CodeGen
 
 import System.Exit
 import System.Environment (getArgs)
