@@ -17,9 +17,12 @@ arbitraryType :: Gen Type
 arbitraryType = arbitrary
 
 -- Does not generate all possible variable names (i.e. does not agree with the
--- lexer's RE) but useful nonetheless.
+-- lexer's RE) but useful nonetheless. In order for parser tests to be useful,
+-- we disallow the empty string and the various keywords that could also be
+-- variable names.
 genVarName :: Gen String
-genVarName = listOf $ elements $ ['a'..'z'] ++ ['A'..'Z']
+genVarName = (listOf $ elements $ ['a'..'z'] ++ ['A'..'Z']) `suchThat`
+    (\s -> s `notElem` ["", "Y", "nil", "if", "then", "else", "end"])
 
 instance Arbitrary Term where
     arbitrary = frequency

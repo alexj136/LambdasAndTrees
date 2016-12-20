@@ -19,11 +19,8 @@ data Term
     | Nil  Info
     deriving (Eq, Ord)
 
-data Info = PosInfo Pos | NoInfo deriving (Eq, Ord)
-
-instance Show Info where
-    show NoInfo      = "-"
-    show (PosInfo i) = show i
+instance Show Term where
+    show = prettyPrint
 
 instance Positionable Term where
     getPos tm = case tm of
@@ -38,11 +35,17 @@ instance Positionable Term where
         Nil  (PosInfo pos)       -> Just pos
         _ -> Nothing
 
+data Info = PosInfo Pos | NoInfo deriving Ord
+
+instance Show Info where
+    show NoInfo      = "-"
+    show (PosInfo i) = show i
+
+instance Eq Info where
+    i1 == i2 = True
+
 infoFromPositionable :: Positionable a => a -> Info
 infoFromPositionable = maybe NoInfo PosInfo . getPos
-
-instance Show Term where
-    show = prettyPrint
 
 -- Convert the indentation-level to a string
 tab :: Integer -> String
