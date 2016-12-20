@@ -1,0 +1,8 @@
+#include "lat_stdlib.h"
+add (
+    add (
+        oneplus (oneplus zero) ,
+        oneplus zero
+    ),
+    oneplus (oneplus (oneplus zero))
+)

@@ -39,14 +39,13 @@
 
 #define zero nil
 
-// Not working yet
-#define add(x, y) ( letrec ( doAdd : @ -> @ -> @ , | xa : @ . | ya : @ . \
+#define add(x, y) ( letrec ( doAdd : @ -> @ -> @ , ( | xa : @ . ( | ya : @ . \
     if xa then \
         doAdd (> xa) (nil.ya) \
     else \
         ya \
-    end \
-    , doAdd x y \
+    end ) )\
+    , ( doAdd ( x ) ( y ) ) \
 ) )
 
 // ---------------------------------
@@ -55,6 +54,6 @@
 
 #define let(x, exp, in) ( ( | x . in ) exp )
 
-#define letrec(x, exp, in) let(x, Y ( | x . exp ), in)
+#define letrec(x, exp, in) ( let(x, ( Y ( | x . exp ) ), in) )
 
 #endif
