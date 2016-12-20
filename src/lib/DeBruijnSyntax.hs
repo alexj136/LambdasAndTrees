@@ -1,4 +1,4 @@
-module Syntax where
+module DeBruijnSyntax where
 
 data Term
     = Lam Term

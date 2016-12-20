@@ -5,7 +5,7 @@ import Lexer
 import Parser
 import SugarSyntax
 import Types
-import qualified Syntax as P
+import qualified DeBruijnSyntax as P
 import TypeCheck
 import Interpreter
 

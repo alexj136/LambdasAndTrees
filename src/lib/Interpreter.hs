@@ -1,7 +1,7 @@
 module Interpreter where
 
 import Util
-import Syntax
+import DeBruijnSyntax
 
 eval :: Term -> Result Term
 eval tm = case tm of

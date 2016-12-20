@@ -29,7 +29,7 @@ library
                         Lexer,
                         Parser,
                         SugarSyntax,
-                        Syntax,
+                        DeBruijnSyntax,
                         Types,
                         TypeCheck,
                         Interpreter

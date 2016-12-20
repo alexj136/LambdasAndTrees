@@ -2,7 +2,7 @@ module SugarSyntax where
 
 import Util
 import Types
-import qualified Syntax as P
+import qualified DeBruijnSyntax as P
 
 import Control.Monad (liftM, liftM2, liftM3)
 import qualified Data.Map as M
@@ -132,7 +132,8 @@ debugPrint = pp 0 where
         Nil  i               ->
             "\n" ++ tab indent ++ "| NIL " ++ show i
 
--- Desugar a Term. Wrapper around a worker that passes a map with name bindings.
+-- Desugar a Term, i.e. convert it to De Bruijn syntax. Wrapper around a worker
+-- that passes a map with name bindings.
 desugar :: Term -> Result P.Term
 desugar = let
     desug :: M.Map String Integer -> Term -> Result P.Term
