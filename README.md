@@ -87,8 +87,8 @@ We define the operational semantics in terms of a semantic function `S`, typed:
 
     S : term → (@ + ⊥)
 
-`S` is defined over all well-typed closed terms. It is undefined over terms of other
-types or with free variables. It is also undefined over terms that evaluate to `> nil` or `< nil`. Its definition is given as follows:
+`S` is defined over all well-typed closed terms. It is undefined over untypeable terms, terms with free variables, and terms that evaluate to `> nil` or `< nil`. Its definition is given as follows:
+
 
     S (|x:T.M)             = S (|x.M)
     S (|x.M)               = |x.M
