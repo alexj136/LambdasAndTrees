@@ -5,6 +5,9 @@ import Types
 import SugarSyntax
 
 import Data.Maybe (fromMaybe)
+import Control.Monad.State
+import Control.Monad.Except
+import Control.Monad.Writer.Lazy
 import qualified Data.Map as M
 import qualified Data.Set as S
 
@@ -45,81 +48,86 @@ unify constrs = if null constrs then return id else
 
     where
 
-        handleVar :: Integer -> Type -> Constraints -> Result (Type -> Type)
-        handleVar x ty rest = do
-            unifyRest <- unify (S.map (constrSub x ty) rest)
-            return $ unifyRest . (tySub x ty)
+    handleVar :: Integer -> Type -> Constraints -> Result (Type -> Type)
+    handleVar x ty rest = do
+        unifyRest <- unify (S.map (constrSub x ty) rest)
+        return $ unifyRest . (tySub x ty)
 
-        constrSub :: Integer -> Type -> Constraint -> Constraint
-        constrSub x ty (Constraint (t1, t2, tm)) =
-            Constraint (tySub x ty t1, tySub x ty t2, tm)
+    constrSub :: Integer -> Type -> Constraint -> Constraint
+    constrSub x ty (Constraint (t1, t2, tm)) =
+        Constraint (tySub x ty t1, tySub x ty t2, tm)
 
-        tySub :: Integer -> Type -> Type -> Type
-        tySub from to within = case within of
-            TVar  x   -> if x == from then to else TVar x
-            TFunc a b -> TFunc (tySub from to a) (tySub from to b)
-            TTree     -> TTree
+    tySub :: Integer -> Type -> Type -> Type
+    tySub from to within = case within of
+        TVar  x   -> if x == from then to else TVar x
+        TFunc a b -> TFunc (tySub from to a) (tySub from to b)
+        TTree     -> TTree
 
-        occurs :: Integer -> Type -> Bool
-        occurs x (TVar  y  ) = x == y
-        occurs x (TFunc a b) = occurs x a || occurs x b
-        occurs x  TTree      = False
+    occurs :: Integer -> Type -> Bool
+    occurs x (TVar  y  ) = x == y
+    occurs x (TFunc a b) = occurs x a || occurs x b
+    occurs x  TTree      = False
 
 constraints :: Env -> Integer -> Term -> Result (Integer, Type, Constraints)
-constraints env fresh tm = case tm of
+constraints env n tm =
+    case runExcept $ runWriterT $ runStateT (constraintGen env tm) n of
+        Left s             -> Error s
+        Right ((t, i), cs) -> return (i, t, cs)
 
+constraintGen :: Env -> Term ->
+    StateT Integer (WriterT Constraints (Except String)) Type
+constraintGen env tm = case tm of
     Lam _ x Nothing body -> do
-        let tyArg = TVar fresh
-        let newEnv = M.insert x tyArg env
-        (fresh', tyBody, constrBody) <- constraints newEnv (fresh + 1) body
-        return (fresh', TFunc tyArg tyBody, constrBody)
-
+        n <- fresh
+        let newEnv = M.insert x (TVar n) env
+        tyBody <- constraintGen newEnv body
+        return $ TFunc (TVar n) tyBody
     Lam _ x (Just tyX) body -> do
         let newEnv = M.insert x tyX env
-        (fresh', tyBody, constrBody) <- constraints newEnv fresh body
-        return (fresh', TFunc tyX tyBody, constrBody)
-
+        tyBody <- constraintGen newEnv body
+        return $ TFunc tyX tyBody
     Var _ x -> case M.lookup x env of
-        Just ty -> return (fresh, ty, S.empty)
-        Nothing -> Error $ "Unbound variable '" ++ x ++ "' found."
-
+        Just ty -> return ty
+        Nothing -> throwError $ "Unbound variable '" ++ x ++ "' found."
     App _ func arg -> do
-        let tyRet = TVar fresh
-        (fresh'  , tyFunc, constrFunc) <- constraints env (fresh + 1) func
-        (fresh'' , tyArg , constrArg ) <- constraints env  fresh'     arg
-        let allConstrs = S.insert (Constraint (tyFunc, TFunc tyArg tyRet, tm))
-                $ S.union constrFunc constrArg
-        return (fresh'', tyRet, allConstrs)
-
+        n <- fresh
+        tyFunc <- constraintGen env func
+        tyArg  <- constraintGen env arg
+        constrain tyFunc (TFunc tyArg (TVar n)) tm
+        return $ TVar n
     Fix _ f -> do
-        let tyFixF = TVar fresh
-        (fresh', tyF, constrF) <- constraints env (fresh + 1) f
-        let allConstrs = S.insert (Constraint (tyF, TFunc tyFixF tyFixF, f)) constrF
-        return (fresh', tyFixF, allConstrs)
-
+        n <- fresh
+        tyF <- constraintGen env f
+        constrain tyF (TFunc (TVar n) (TVar n)) f
+        return $ TVar n
     Cond _ gd tbr fbr -> do
-        (fresh'  , tyGd , constrGd ) <- constraints env fresh   gd
-        (fresh'' , tyTbr, constrTbr) <- constraints env fresh'  tbr
-        (fresh''', tyFbr, constrFbr) <- constraints env fresh'' fbr
-        let allConstrs = S.insert (Constraint (tyGd , TTree, gd))
-                $ S.insert (Constraint (tyTbr, tyFbr, tm))
-                $ S.unions [constrGd, constrTbr, constrFbr]
-        return (fresh''', tyTbr, allConstrs)
-
+        tyGd  <- constraintGen env gd
+        tyTbr <- constraintGen env tbr
+        tyFbr <- constraintGen env fbr
+        constrain tyGd TTree gd
+        constrain tyTbr tyFbr tm
+        return tyTbr
     Cons _ l r -> do
-        (fresh' , tyL, constrL) <- constraints env fresh  l
-        (fresh'', tyR, constrR) <- constraints env fresh' r
-        let allConstrs = S.insert (Constraint (tyL, TTree, l))
-                $ S.insert (Constraint (tyR, TTree, r))
-                $ S.union constrL constrR
-        return (fresh'', TTree, allConstrs)
-
+        tyL <- constraintGen env l
+        tyR <- constraintGen env r
+        constrain tyL TTree l
+        constrain tyR TTree r
+        return TTree
     Hd _ e -> do
-        (fresh', tyE, constrE) <- constraints env fresh e
-        return (fresh', TTree, S.insert (Constraint (tyE, TTree, e)) constrE)
-
+        tyE <- constraintGen env e
+        constrain tyE TTree e
+        return TTree
     Tl _ e -> do
-        (fresh', tyE, constrE) <- constraints env fresh e
-        return (fresh', TTree, S.insert (Constraint (tyE, TTree, e)) constrE)
+        tyE <- constraintGen env e
+        constrain tyE TTree e
+        return TTree
+    Nil _ -> return TTree
 
-    Nil _ -> return (fresh, TTree, S.empty)
+    where
+
+    fresh :: Monad m => StateT Integer m Integer
+    fresh = state $ \n -> (n, n + 1)
+
+    constrain :: MonadTrans m => Monad n => Type -> Type -> Term ->
+        m (WriterT Constraints n) ()
+    constrain t1 t2 tm = lift $ tell $ S.singleton (Constraint (t1, t2, tm))
