@@ -6,7 +6,7 @@ import SugarSyntax
 
 import Data.Maybe (fromMaybe)
 import Control.Monad.State
-import Control.Monad.Except
+import Control.Monad.Except (throwError)
 import Control.Monad.Writer.Lazy
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -24,7 +24,7 @@ instance Eq Constraint where
 
 check :: Term -> Result Type
 check tm = do
-    (_, ty, constrs) <- constraints M.empty 0 tm
+    ((ty, _), constrs) <- runWriterT $ runStateT (constraints M.empty tm) 0
     unifyFn <- unify constrs
     return $ unifyFn ty
 
@@ -42,7 +42,8 @@ unify constrs = if null constrs then return id else
             S.insert (Constraint (a1, a2, tm)) $
             S.insert (Constraint (b1, b2, tm)) $ rest
 
-        Constraint (ty1, ty2, tm) -> Error $ "Unsatisfiable type constraint at "
+        Constraint (ty1, ty2, tm) -> throwError
+            $ "Unsatisfiable type constraint at "
             ++ (fromMaybe "[NO POSITION DATA]" (fmap show (getPos tm)))
             ++ "\nin expression:\n" ++ show tm
 
@@ -68,57 +69,51 @@ unify constrs = if null constrs then return id else
     occurs x (TFunc a b) = occurs x a || occurs x b
     occurs x  TTree      = False
 
-constraints :: Env -> Integer -> Term -> Result (Integer, Type, Constraints)
-constraints env n tm =
-    case runExcept $ runWriterT $ runStateT (constraintGen env tm) n of
-        Left s             -> Error s
-        Right ((t, i), cs) -> return (i, t, cs)
-
-constraintGen :: Env -> Term ->
-    StateT Integer (WriterT Constraints (Except String)) Type
-constraintGen env tm = case tm of
+constraints :: Env -> Term ->
+    StateT Integer (WriterT Constraints Result) Type
+constraints env tm = case tm of
     Lam _ x Nothing body -> do
         n <- fresh
         let newEnv = M.insert x (TVar n) env
-        tyBody <- constraintGen newEnv body
+        tyBody <- constraints newEnv body
         return $ TFunc (TVar n) tyBody
     Lam _ x (Just tyX) body -> do
         let newEnv = M.insert x tyX env
-        tyBody <- constraintGen newEnv body
+        tyBody <- constraints newEnv body
         return $ TFunc tyX tyBody
     Var _ x -> case M.lookup x env of
         Just ty -> return ty
         Nothing -> throwError $ "Unbound variable '" ++ x ++ "' found."
     App _ func arg -> do
         n <- fresh
-        tyFunc <- constraintGen env func
-        tyArg  <- constraintGen env arg
+        tyFunc <- constraints env func
+        tyArg  <- constraints env arg
         constrain tyFunc (TFunc tyArg (TVar n)) tm
         return $ TVar n
     Fix _ f -> do
         n <- fresh
-        tyF <- constraintGen env f
+        tyF <- constraints env f
         constrain tyF (TFunc (TVar n) (TVar n)) f
         return $ TVar n
     Cond _ gd tbr fbr -> do
-        tyGd  <- constraintGen env gd
-        tyTbr <- constraintGen env tbr
-        tyFbr <- constraintGen env fbr
+        tyGd  <- constraints env gd
+        tyTbr <- constraints env tbr
+        tyFbr <- constraints env fbr
         constrain tyGd TTree gd
         constrain tyTbr tyFbr tm
         return tyTbr
     Cons _ l r -> do
-        tyL <- constraintGen env l
-        tyR <- constraintGen env r
+        tyL <- constraints env l
+        tyR <- constraints env r
         constrain tyL TTree l
         constrain tyR TTree r
         return TTree
     Hd _ e -> do
-        tyE <- constraintGen env e
+        tyE <- constraints env e
         constrain tyE TTree e
         return TTree
     Tl _ e -> do
-        tyE <- constraintGen env e
+        tyE <- constraints env e
         constrain tyE TTree e
         return TTree
     Nil _ -> return TTree

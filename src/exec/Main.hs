@@ -12,6 +12,7 @@ import CodeGen
 
 import System.Exit
 import System.Environment (getArgs)
+import Control.Monad.Except
 
 main :: IO ExitCode
 main = do
@@ -19,11 +20,11 @@ main = do
     case args of
         [fileName] -> do
             inputText <- readFile fileName
-            case runPipeline inputText of
-                Success t -> do
+            case runExcept (runPipeline inputText) of
+                Right t -> do
                     putStrLn $ show t
                     exitSuccess
-                Error m -> do
+                Left m -> do
                     putStrLn $ "Error: " ++ m
                     exitFailure
         _ -> do
@@ -36,8 +37,9 @@ runPipeline progText = do
     sugarAST <- parse tokens
     ty       <- check sugarAST
     if ty /= TTree then
-        Error $ "Program has type '" ++ show ty ++ "'. Valid programs have "
-        ++ "type '" ++ show TTree ++ "'."
+        throwError
+            $ "Program has type '" ++ show ty ++ "'. Valid programs have "
+            ++ "type '" ++ show TTree ++ "'."
     else do
         pureAST  <- desugar sugarAST
         eval pureAST

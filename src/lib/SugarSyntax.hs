@@ -5,6 +5,7 @@ import Types
 import qualified DeBruijnSyntax as P
 
 import Control.Monad (liftM, liftM2, liftM3)
+import Control.Monad.Except (throwError)
 import qualified Data.Map as M
 
 data Term
@@ -141,7 +142,7 @@ desugar = let
         Lam  _ n _ b -> liftM P.Lam (desug (M.insert n 0 (M.map (+1) ns)) b)
         Var  _ n     -> case M.lookup n ns of
             Just x  -> return $ P.Var x
-            Nothing -> Error $ "Unbound variable '" ++ n ++ "'."
+            Nothing -> throwError $ "Unbound variable '" ++ n ++ "'."
         App  _ f a   -> liftM2 P.App  (desug ns f) (desug ns a)
         Fix  _ t     -> liftM  P.Fix  (desug ns t)
         Cond _ g t f -> liftM3 P.Cond (desug ns g) (desug ns t) (desug ns f)

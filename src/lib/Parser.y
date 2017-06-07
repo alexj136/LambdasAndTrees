@@ -9,6 +9,7 @@ import Types
 import Prelude hiding (span)
 import qualified Data.Map as M
 import Control.Monad (liftM, ap)
+import Control.Monad.Except (throwError)
 }
 
 %monad { Result }
@@ -69,7 +70,7 @@ parse :: [Token] -> Result Term
 parse = (fmap tsToT) . parseTS
 
 parseError :: [Token] -> Result a
-parseError tokens = Error $ case tokens of
+parseError tokens = throwError $ case tokens of
     []                          -> "Reached end of file while parsing"
     (Token (_, AlexPn _ r c, s):rest) ->
         "Parse error on line " ++ show r ++ ", column " ++ show c ++ ": "

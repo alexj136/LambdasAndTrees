@@ -3,12 +3,14 @@ module Interpreter where
 import Util
 import DeBruijnSyntax
 
+import Control.Monad.Except (throwError)
+
 eval :: Term -> Result Term
 eval tm = case tm of
 
     Lam _ -> return tm
 
-    Var _ -> Error "Implementation error - free Var reached eval"
+    Var _ -> throwError  "Implementation error - free Var reached eval"
 
     App (Lam body) (arg) -> eval (shift (-1) 0 (sub 0 (shift 1 0 arg) body))
 
@@ -36,13 +38,13 @@ eval tm = case tm of
         evE <- eval e
         case evE of
             Cons h _ -> return h
-            Nil      -> Error "< nil"
+            Nil      -> throwError "< nil"
 
     Tl e -> do
         evE <- eval e
         case evE of
             Cons _ t -> return t
-            Nil      -> Error "> nil"
+            Nil      -> throwError "> nil"
 
     Nil -> return Nil
 

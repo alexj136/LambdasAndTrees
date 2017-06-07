@@ -2,25 +2,13 @@ module Util where
 
 import Prelude hiding (span)
 import qualified Data.Map as M
-import Control.Monad (liftM, ap)
+import Control.Monad.Except
 
 ------------------
 -- Result Monad --
 ------------------
 
-data Result a = Error String | Success a deriving (Show, Eq, Ord)
-
-instance Functor Result where
-    fmap = liftM
-
-instance Applicative Result where
-    pure  = return
-    (<*>) = ap
-
-instance Monad Result where
-    (Error   s) >>= f = Error s
-    (Success a) >>= f = f a
-    return = Success
+type Result = Except String
 
 ----------------------------------------------------------
 -- Class for things that can have source code positions --
