@@ -22,16 +22,16 @@ arbitraryType = arbitrary
 -- variable names.
 genVarName :: Gen String
 genVarName = (listOf $ elements $ ['a'..'z'] ++ ['A'..'Z']) `suchThat`
-    (\s -> s `notElem` ["", "Y", "nil", "if", "then", "else", "end"])
+    (\s -> s `notElem` ["", "let", "in", "nil", "if", "then", "else", "end"])
 
 instance Arbitrary Term where
     arbitrary = frequency
         [ ( 2, liftM4 Lam  nfo genVarName arbitrary arbitrary )
         , ( 9, liftM2 Var  nfo genVarName                     )
-        , ( 2, liftM3 App  nfo arbitrary arbitrary            )
-        , ( 4, liftM2 Fix  nfo arbitrary                      )
-        , ( 1, liftM4 Cond nfo arbitrary arbitrary arbitrary  )
-        , ( 2, liftM3 Cons nfo arbitrary arbitrary            )
+        , ( 2, liftM3 App  nfo arbitrary  arbitrary           )
+        , ( 2, liftM4 Let  nfo genVarName arbitrary arbitrary )
+        , ( 1, liftM4 Cond nfo arbitrary  arbitrary arbitrary )
+        , ( 2, liftM3 Cons nfo arbitrary  arbitrary           )
         , ( 4, liftM2 Hd   nfo arbitrary                      )
         , ( 4, liftM2 Tl   nfo arbitrary                      )
         , ( 9, liftM  Nil  nfo                                )
@@ -77,13 +77,15 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
 
     where
 
-    ex, eq, cn :: Int
+    md, ex, eq, cn :: Int
+    -- probability of generating something to make the term really grow
+    md = if depth <= 1 then 0 else 1
     -- probability of generating something to make the term grow
     ex = if depth <= 1 then 0 else 4
     -- probability of generating something to keep the term about the same size
     eq = if depth <= 1 then 0 else 2
     -- probability of generating something to make the term shrink
-    cn = 4
+    cn = 8
 
     -- Make a recursive call for a given type with the same environment
     recurse :: Type -> Gen Term
@@ -103,7 +105,7 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
     tTreeRest :: [(Int, Gen Term)]
     tTreeRest =
         [ ( ex, application TTree                                             )
-        --, ( 4, liftM Fix (genTypeSafeTerm env TTree)                        )
+        , ( md, letE TTree                                                    )
         , ( ex, liftM4 Cond nfo (recurse TTree)(recurse TTree)(recurse TTree) )
         , ( ex, liftM3 Cons nfo (recurse TTree)(recurse TTree)                )
         , ( eq, liftM2 Tl   nfo (recurse TTree)                               )
@@ -116,9 +118,15 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
     tFuncRest argTy retTy =
         [ ( cn, lambda argTy retTy                                        )
         , ( ex, application ty                                            )
-        --, ( 4, liftM Fix arbitrary                                        )
+        --, ( ex, letE (TFunc argTy retTy)                                  )
         , ( ex, liftM4 Cond nfo (recurse TTree) (recurse ty) (recurse ty) )
         ]
+
+    letE :: Type -> Gen Term
+    letE ty = do
+        x  <- genVarName
+        tX <- if depth <= 1 then return TTree else arbitraryType
+        liftM4 Let nfo (return x) (recurse tX) (recurseWith x tX ty)
 
     -- Generate a lambda expression with the given argument and return type
     lambda :: Type -> Type -> Gen Term

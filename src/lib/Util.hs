@@ -10,6 +10,15 @@ import Control.Monad.Except
 
 type Result = Except String
 
+-------------------
+-- The Name type --
+-------------------
+
+newtype Name = Name Integer deriving (Eq, Ord)
+
+instance Show Name where
+    show (Name n) = "__NAME" ++ show n ++ "__"
+
 ----------------------------------------------------------
 -- Class for things that can have source code positions --
 ----------------------------------------------------------

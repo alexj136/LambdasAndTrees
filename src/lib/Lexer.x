@@ -21,6 +21,9 @@ tokens :-
     "then"                 { \p s -> Token ( TK_Then    , p , s ) }
     "else"                 { \p s -> Token ( TK_Else    , p , s ) }
     "end"                  { \p s -> Token ( TK_End     , p , s ) }
+    "let"                  { \p s -> Token ( TK_Let     , p , s ) }
+    "="                    { \p s -> Token ( TK_Eq      , p , s ) }
+    "in"                   { \p s -> Token ( TK_In      , p , s ) }
     "("                    { \p s -> Token ( TK_LParen  , p , s ) }
     ")"                    { \p s -> Token ( TK_RParen  , p , s ) }
     "."                    { \p s -> Token ( TK_Dot     , p , s ) }
@@ -29,7 +32,6 @@ tokens :-
     ">"                    { \p s -> Token ( TK_Tl      , p , s ) }
     "@"                    { \p s -> Token ( TK_At      , p , s ) }
     ":"                    { \p s -> Token ( TK_Colon   , p , s ) }
-    "Y"                    { \p s -> Token ( TK_Fix     , p , s ) }
     $alpha [$alnum \_]*    { \p s -> Token ( TK_Name    , p , s ) }
     .                      { \p s -> Token ( TK_Error   , p , s ) }
 
@@ -46,6 +48,9 @@ data TokenType
     | TK_Then
     | TK_Else
     | TK_End
+    | TK_Let
+    | TK_Eq
+    | TK_In
     | TK_LParen
     | TK_RParen
     | TK_Dot
@@ -54,7 +59,6 @@ data TokenType
     | TK_Tl
     | TK_At
     | TK_Colon
-    | TK_Fix
     | TK_Name
     | TK_Error
     deriving (Show, Eq)

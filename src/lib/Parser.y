@@ -30,6 +30,9 @@ import Control.Monad.Except (throwError)
     Then    { Token ( TK_Then     , _ , _ ) }
     Else    { Token ( TK_Else     , _ , _ ) }
     End     { Token ( TK_End      , _ , _ ) }
+    Let     { Token ( TK_Let      , _ , _ ) }
+    Eq      { Token ( TK_Eq       , _ , _ ) }
+    In      { Token ( TK_In       , _ , _ ) }
     LParen  { Token ( TK_LParen   , _ , _ ) }
     RParen  { Token ( TK_RParen   , _ , _ ) }
     Dot     { Token ( TK_Dot      , _ , _ ) }
@@ -39,7 +42,6 @@ import Control.Monad.Except (throwError)
     Name    { Token ( TK_Name     , _ , _ ) }
     At      { Token ( TK_At       , _ , _ ) }
     Colon   { Token ( TK_Colon    , _ , _ ) }
-    Fix     { Token ( TK_Fix      , _ , _ ) }
     Error   { Token ( TK_Error    , _ , _ ) }
 %%
 
@@ -49,12 +51,12 @@ TERM
     | Bar Name Colon TY Dot TS  %prec llam { lamT   $1 $2 $3 $4 $5 $6    }
     | Name                      %prec var  { var    $1                   }
     | If TS Then TS Else TS End %prec cond { cond   $1 $2 $3 $4 $5 $6 $7 }
+    | Let Name Eq TS In TS                 { lt     $1 $2 $3 $4 $5 $6    }
     | LParen TS Dot TS RParen   %prec cons { cons   $1 $2 $3 $4 $5       }
     | Hd TS                                { hd     $1 $2                }
     | Tl TS                                { tl     $1 $2                }
     | Nil                                  { nil    $1                   }
     | LParen TS RParen                     { parens $1 $2 $3             }
-    | Fix TS                               { fix    $1 $2                }
 
 TS :: { [Term] }
 TS : TERM TS { $1 : $2 } | TERM { [$1] }
@@ -113,8 +115,9 @@ nil (Token (_, AlexPn _ r c, s)) = Nil $ PosInfo $ Pos r c r (c + length s)
 parens :: Token -> [Term] -> Token -> Term
 parens lpTk body rpTk = tsToT body
 
-fix :: Token -> [Term] -> Term
-fix fixTk body = Fix (maybe NoInfo PosInfo (fixTk `span` body)) (tsToT body)
+lt :: Token -> Token -> Token -> [Term] -> Token -> [Term] -> Term
+lt letTk (Token (_, _, name)) eqTk def inTk body =
+    Let (maybe NoInfo PosInfo (letTk `span` body)) name (tsToT def) (tsToT body)
 
 tsToT :: [Term] -> Term
 tsToT [ ] = error "tsToT of []"

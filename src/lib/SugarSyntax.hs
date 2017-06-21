@@ -12,7 +12,7 @@ data Term
     = Lam  Info String (Maybe Type) Term
     | Var  Info String
     | App  Info Term Term
-    | Fix  Info Term
+    | Let  Info String Term Term
     | Cond Info Term Term Term
     | Cons Info Term Term
     | Hd   Info Term
@@ -28,7 +28,7 @@ instance Positionable Term where
         Lam  (PosInfo pos) _ _ _ -> Just pos
         Var  (PosInfo pos) _     -> Just pos
         App  (PosInfo pos) _ _   -> Just pos
-        Fix  (PosInfo pos) _     -> Just pos
+        Let  (PosInfo pos) _ _ _ -> Just pos
         Cond (PosInfo pos) _ _ _ -> Just pos
         Cons (PosInfo pos) _ _   -> Just pos
         Hd   (PosInfo pos) _     -> Just pos
@@ -68,7 +68,10 @@ prettyPrint = pp 0 where
         Var  _ x            -> x
         App  _ m n          ->
             "(" ++ (pp (indent + 1) m) ++ " " ++ (pp (indent + 1) n) ++ ")"
-        Fix  _ f            -> "(Y " ++ (pp (indent + 1) f) ++ ")"
+        Let  _ x d b        ->
+            "(let " ++ x ++ " = " ++ (pp (indent + 1) d) ++ " in \n"
+            ++ tab (indent + 1) ++ (pp (indent + 1) b)
+            ++ tab  indent      ++ ")"
         Cond _ g t f        ->
             "if " ++ show g ++ " then\n"
             ++ tab (indent + 1) ++ (pp (indent + 1) t) ++ "\n"
@@ -104,10 +107,13 @@ debugPrint = pp 0 where
             ++ pp (indent + 2) m
             ++ "\n" ++ tab (indent + 1) ++ "| ARGUMENT = "
             ++ pp (indent + 2) n
-        Fix  i f            ->
-            "\n" ++ tab indent ++ "| Y-COMBINATOR " ++ show i
-            ++ "\n" ++ tab (indent + 1) ++ "| ARGUMENT = "
-            ++ pp (indent + 2) f
+        Let  i x d b        ->
+            "\n" ++ tab indent ++ "| LET " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| BINDER = " ++ x
+            ++ "\n" ++ tab (indent + 1) ++ "| DEFINITION = "
+            ++ pp (indent + 2) d
+            ++ "\n" ++ tab (indent + 1) ++ "| SCOPE = "
+            ++ pp (indent + 2) b
         Cond i g t f        ->
             "\n" ++ tab indent ++ "| CONDITIONAL " ++ show i
             ++ "\n" ++ tab (indent + 1) ++ "| GUARD       = "
@@ -144,7 +150,8 @@ desugar = let
             Just x  -> return $ P.Var x
             Nothing -> throwError $ "Unbound variable '" ++ n ++ "'."
         App  _ f a   -> liftM2 P.App  (desug ns f) (desug ns a)
-        Fix  _ t     -> liftM  P.Fix  (desug ns t)
+        Let  i x d b ->
+            liftM2 P.App (liftM P.Fix (desug ns (Lam i x Nothing b))) (desug ns d)
         Cond _ g t f -> liftM3 P.Cond (desug ns g) (desug ns t) (desug ns f)
         Cons _ l r   -> liftM2 P.Cons (desug ns l) (desug ns r)
         Hd   _ t     -> liftM  P.Hd   (desug ns t)

@@ -5,60 +5,16 @@ module CodeGen where
 --
 -- In order to generate code, we transform the SugarSyntax Term in several
 -- phases:
---     1) Removal of the Y combinator from a SugarSyntax.Term, resulting in a
---        NoYTm. At this phase we also drop any source position information and
---        type labels.
---     2) Elimination of free variables under all lambdas (NoYTm -> NoFrTm).
+--     1) Elimination of free variables under all lambdas (NoYTm -> NoFrTm).
 --        NoFrTms are not allowed to have any free variables under a given
 --        lambda. Lambdas can have multiple arguments here.
---     3) Lambda lifting from a NoFrTm to an LTerm, where all functions are
+--     2) Lambda lifting from a NoFrTm to an LTerm, where all functions are
 --        named global functions, not lambdas.
 
 import qualified SugarSyntax as Z
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-
--------------------------------------------
--- NoYTm definition                    --
--------------------------------------------
-
-data NoYTm
-    = NoYLam  String NoYTm
-    | NoYVar  String
-    | NoYApp  NoYTm  NoYTm
-    | NoYCond NoYTm  NoYTm NoYTm
-    | NoYCons NoYTm  NoYTm
-    | NoYHd   NoYTm
-    | NoYTl   NoYTm
-    | NoYNil
-    deriving (Show, Eq, Ord)
-
--- Remove all occurences of the Y-combinator from a SugarSyntax Term. Replace
--- them with a pure-lambda version of the Y-combinator. This is done after type
--- checking as the replacement term is untypable.
-unY :: Z.Term -> NoYTm
-unY tm = case tm of
-    Z.Lam  _ x _ m -> NoYLam  x (unY m)
-    Z.Var  _ x     -> NoYVar  x
-    Z.App  _ m n   -> NoYApp  (unY m) (unY n)
-    Z.Fix  _ f     -> NoYApp  noYFix (unY f)
-    Z.Cond _ g t f -> NoYCond (unY g) (unY t) (unY f)
-    Z.Cons _ l r   -> NoYCons (unY l) (unY r)
-    Z.Hd   _ t     -> NoYHd   (unY t)
-    Z.Tl   _ t     -> NoYTl   (unY t)
-    Z.Nil  _       -> NoYNil  
-
--- The Y-Combinator in pure lambdas
-noYFix :: NoYTm
-noYFix =
-    NoYLam "f" (
-        NoYApp (
-            NoYLam "x" (NoYApp (NoYVar "f") (NoYApp (NoYVar "x") (NoYVar "x")))
-        ) (
-            NoYLam "x" (NoYApp (NoYVar "f") (NoYApp (NoYVar "x") (NoYVar "x")))
-        )
-    )
 
 -------------------------------------------
 -- NoFrTm definition                     --
@@ -68,6 +24,7 @@ data NoFrTm
     = NoFrLam  [String] NoFrTm
     | NoFrVar   String
     | NoFrApp   NoFrTm [NoFrTm]
+    | NoFrLet  [String] NoFrTm NoFrTm
     | NoFrCond  NoFrTm  NoFrTm NoFrTm
     | NoFrCons  NoFrTm  NoFrTm
     | NoFrHd    NoFrTm
@@ -78,25 +35,27 @@ data NoFrTm
 -- Determine the free variables of a NoFrTm
 frees :: NoFrTm -> S.Set String
 frees tm = case tm of
-    NoFrLam  xs m  -> foldr S.delete (frees m) xs
-    NoFrVar  x     -> S.singleton x
-    NoFrApp  f as  -> frees f `S.union` S.unions (map frees as)
-    NoFrCond g t f -> frees g `S.union` frees t `S.union` frees f
-    NoFrCons l r   -> frees l `S.union` frees r
-    NoFrHd   t     -> frees t
-    NoFrTl   t     -> frees t
-    NoFrNil        -> S.empty
+    NoFrLam  xs m   -> foldr S.delete (frees m) xs
+    NoFrVar  x      -> S.singleton x
+    NoFrApp  f as   -> frees f `S.union` S.unions (map frees as)
+    NoFrLet  xs d b -> undefined
+    NoFrCond g t f  -> frees g `S.union` frees t `S.union` frees f
+    NoFrCons l r    -> frees l `S.union` frees r
+    NoFrHd   t      -> frees t
+    NoFrTl   t      -> frees t
+    NoFrNil         -> S.empty
 
-elimFrees :: NoYTm -> NoFrTm
+elimFrees :: Z.Term -> NoFrTm
 elimFrees tm = case tm of
-    NoYVar  x     -> NoFrVar   x
-    NoYApp  m n   -> NoFrApp  (elimFrees m) [elimFrees n]
-    NoYCond g t f -> NoFrCond (elimFrees g) (elimFrees t) (elimFrees f)
-    NoYCons l r   -> NoFrCons (elimFrees l) (elimFrees r)
-    NoYHd   t     -> NoFrHd $  elimFrees t
-    NoYTl   t     -> NoFrTl $  elimFrees t
-    NoYNil        -> NoFrNil
-    NoYLam  x m   ->
+    Z.Var  _ x     -> NoFrVar   x
+    Z.App  _ m n   -> NoFrApp  (elimFrees m) [elimFrees n]
+    Z.Cond _ g t f -> NoFrCond (elimFrees g) (elimFrees t) (elimFrees f)
+    Z.Cons _ l r   -> NoFrCons (elimFrees l) (elimFrees r)
+    Z.Hd   _ t     -> NoFrHd $  elimFrees t
+    Z.Tl   _ t     -> NoFrTl $  elimFrees t
+    Z.Nil  _       -> NoFrNil
+    Z.Let  _ _ _ _ -> undefined
+    Z.Lam  _ x _ m ->
         let noFrM   = elimFrees m
             newArgs = S.toList $ frees noFrM
         in

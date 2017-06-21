@@ -81,20 +81,19 @@ constraints env tm = case tm of
         let newEnv = M.insert x tyX env
         tyBody <- constraints newEnv body
         return $ TFunc tyX tyBody
-    Var _ x -> case M.lookup x env of
+    Var i x -> case M.lookup x env of
         Just ty -> return ty
-        Nothing -> throwError $ "Unbound variable '" ++ x ++ "' found."
+        Nothing -> throwError $ "Unbound name '" ++ x ++ "': " ++ show i
     App _ func arg -> do
         n <- fresh
         tyFunc <- constraints env func
         tyArg  <- constraints env arg
         constrain tyFunc (TFunc tyArg (TVar n)) tm
         return $ TVar n
-    Fix _ f -> do
-        n <- fresh
-        tyF <- constraints env f
-        constrain tyF (TFunc (TVar n) (TVar n)) f
-        return $ TVar n
+    Let _ x d b -> do
+        b' <- subst d x b
+        tyB' <- constraints env b'
+        return tyB'
     Cond _ gd tbr fbr -> do
         tyGd  <- constraints env gd
         tyTbr <- constraints env tbr
@@ -126,3 +125,38 @@ constraints env tm = case tm of
     constrain :: MonadTrans m => Monad n => Type -> Type -> Term ->
         m (WriterT Constraints n) ()
     constrain t1 t2 tm = lift $ tell $ S.singleton (Constraint (t1, t2, tm))
+
+    subst :: Monad m => Term -> String -> Term -> StateT Integer m Term
+    subst arg x body = case arg of
+        Lam i y ty b | y `S.member` free arg -> do
+            n <- fresh
+            b' <- subst (Var NoInfo (show n)) y b
+            liftM (Lam i (show n) ty) (subst arg x b')
+        Lam i y ty b | otherwise -> liftM (Lam i y ty) (subst arg x b)
+        Var i y | x == y -> return arg
+        Var i y | x /= y -> return body
+        App i f a -> liftM2 (App i) (subst arg x f) (subst arg x a)
+        Let i y d b | y `S.member` free arg -> do
+            n <- fresh
+            b' <- subst (Var NoInfo (show n)) y b
+            liftM2 (Let i (show n)) (subst arg x d) (subst arg x b')
+        Let i y d b | otherwise ->
+            liftM2 (Let i y) (subst arg x d) (subst arg x b)
+        Cond i gd tbr fbr ->
+            liftM3 (Cond i) (subst arg x gd) (subst arg x tbr) (subst arg x fbr)
+        Cons i l r -> liftM2 (Cons i) (subst arg x l) (subst arg x r)
+        Hd i e -> liftM (Hd i) (subst arg x e)
+        Tl i e -> liftM (Tl i) (subst arg x e)
+        Nil i -> return $ Nil i
+
+    free :: Term -> S.Set String
+    free tm = case tm of
+        Lam _ x _ body    -> S.delete x (free body)
+        Var _ x           -> S.singleton x
+        App _ func arg    -> free func `S.union` free arg
+        Let _ x d b       -> free d `S.union` (S.delete x (free b))
+        Cond _ gd tbr fbr -> free gd `S.union` free tbr `S.union` free fbr
+        Cons _ l r        -> free l `S.union` free r
+        Hd _ e            -> free e
+        Tl _ e            -> free e
+        Nil _             -> S.empty
