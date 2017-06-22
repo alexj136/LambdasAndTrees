@@ -1,7 +1,11 @@
-#include "../lat_stdlib.h"
-
 // An example of recursion. A sort of reverse function.
-letrec ( f , | x . if x then ( nil . f ( < x ) ) else x end ,
+
+let f = fix | f . | x .
+    if x then
+        ( nil . f ( < x ) )
+    else
+        x
+    end
+in
 
     f ( ( ( ( ( nil . nil ) . nil ) . nil ) . nil ) . nil )
-)

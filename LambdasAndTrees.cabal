@@ -47,5 +47,9 @@ Test-Suite LambdasAndTrees-testsuite
                         QuickCheck,
                         test-framework,
                         test-framework-quickcheck2
+  other-modules:        GenData,
+                        TestParser,
+                        TestTypeCheck,
+                        TestUtil
   type:                 exitcode-stdio-1.0
   main-is:              TestMain.hs

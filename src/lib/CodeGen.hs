@@ -12,6 +12,7 @@ module CodeGen where
 --        named global functions, not lambdas.
 
 import qualified SugarSyntax as Z
+import Util
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -21,10 +22,10 @@ import qualified Data.Set as S
 -------------------------------------------
 
 data NoFrTm
-    = NoFrLam  [String] NoFrTm
-    | NoFrVar   String
+    = NoFrLam   [Name]  NoFrTm
+    | NoFrVar    Name
     | NoFrApp   NoFrTm [NoFrTm]
-    | NoFrLet  [String] NoFrTm NoFrTm
+    | NoFrLet   [Name]  NoFrTm NoFrTm
     | NoFrCond  NoFrTm  NoFrTm NoFrTm
     | NoFrCons  NoFrTm  NoFrTm
     | NoFrHd    NoFrTm
@@ -33,7 +34,7 @@ data NoFrTm
     deriving (Show, Eq, Ord)
 
 -- Determine the free variables of a NoFrTm
-frees :: NoFrTm -> S.Set String
+frees :: NoFrTm -> S.Set Name
 frees tm = case tm of
     NoFrLam  xs m   -> foldr S.delete (frees m) xs
     NoFrVar  x      -> S.singleton x
@@ -74,7 +75,7 @@ newtype LProg = LProg (M.Map Integer ([String], LTerm), LTerm)
 -- LTerms are 'lambda-lifted' i.e. contain only global functions, no lambdas
 data LTerm
     = LFnApp Integer [LTerm]
-    | LVar   String
+    | LVar   Name
     | LCond  LTerm    LTerm  LTerm
     | LCons  LTerm    LTerm
     | LHd    LTerm

@@ -2,4 +2,4 @@
   | y : @ .
   | z : @ . ( ( x . y ) . z ) )
 
-  ( nil . nil ) nil nil
+    ( nil . nil ) nil nil

@@ -24,25 +24,26 @@ import Control.Monad.Except (throwError)
 %error     { parseError }
 
 %token
-    Bar     { Token ( TK_Bar      , _ , _ ) }
-    Arrow   { Token ( TK_Arrow    , _ , _ ) }
-    If      { Token ( TK_If       , _ , _ ) }
-    Then    { Token ( TK_Then     , _ , _ ) }
-    Else    { Token ( TK_Else     , _ , _ ) }
-    End     { Token ( TK_End      , _ , _ ) }
-    Let     { Token ( TK_Let      , _ , _ ) }
-    Eq      { Token ( TK_Eq       , _ , _ ) }
-    In      { Token ( TK_In       , _ , _ ) }
-    LParen  { Token ( TK_LParen   , _ , _ ) }
-    RParen  { Token ( TK_RParen   , _ , _ ) }
-    Dot     { Token ( TK_Dot      , _ , _ ) }
-    Nil     { Token ( TK_Nil      , _ , _ ) }
-    Hd      { Token ( TK_Hd       , _ , _ ) }
-    Tl      { Token ( TK_Tl       , _ , _ ) }
-    Name    { Token ( TK_Name     , _ , _ ) }
-    At      { Token ( TK_At       , _ , _ ) }
-    Colon   { Token ( TK_Colon    , _ , _ ) }
-    Error   { Token ( TK_Error    , _ , _ ) }
+    Bar     { Token ( _ , TK_Bar    ) }
+    Arrow   { Token ( _ , TK_Arrow  ) }
+    If      { Token ( _ , TK_If     ) }
+    Then    { Token ( _ , TK_Then   ) }
+    Else    { Token ( _ , TK_Else   ) }
+    End     { Token ( _ , TK_End    ) }
+    Let     { Token ( _ , TK_Let    ) }
+    Eq      { Token ( _ , TK_Eq     ) }
+    In      { Token ( _ , TK_In     ) }
+    Fix     { Token ( _ , TK_Fix    ) }
+    LParen  { Token ( _ , TK_LParen ) }
+    RParen  { Token ( _ , TK_RParen ) }
+    Dot     { Token ( _ , TK_Dot    ) }
+    Nil     { Token ( _ , TK_Nil    ) }
+    Hd      { Token ( _ , TK_Hd     ) }
+    Tl      { Token ( _ , TK_Tl     ) }
+    Name    { Token ( _ , TK_Name _ ) }
+    At      { Token ( _ , TK_At     ) }
+    Colon   { Token ( _ , TK_Colon  ) }
+    Error   { Token ( _ , TK_Error  ) }
 %%
 
 TERM :: { Term }
@@ -52,6 +53,7 @@ TERM
     | Name                      %prec var  { var    $1                   }
     | If TS Then TS Else TS End %prec cond { cond   $1 $2 $3 $4 $5 $6 $7 }
     | Let Name Eq TS In TS                 { lt     $1 $2 $3 $4 $5 $6    }
+    | Fix                                  { fix    $1                   }
     | LParen TS Dot TS RParen   %prec cons { cons   $1 $2 $3 $4 $5       }
     | Hd TS                                { hd     $1 $2                }
     | Tl TS                                { tl     $1 $2                }
@@ -73,26 +75,31 @@ parse = (fmap tsToT) . parseTS
 
 parseError :: [Token] -> Result a
 parseError tokens = throwError $ case tokens of
-    []                          -> "Reached end of file while parsing"
-    (Token (_, AlexPn _ r c, s):rest) ->
-        "Parse error on line " ++ show r ++ ", column " ++ show c ++ ": "
-        ++ "'" ++ s ++ "'"
+    []                     -> "Reached end of file while parsing"
+    (Token (pos, tk):rest) ->
+        "Parse error: " ++ showMPos pos
 
---------------------------------------------------------------------
---  TERM Production Handlers - thread position info through terms --
---------------------------------------------------------------------
+------------------------------------------------------------------
+--  TM Production Handlers - thread position info through terms --
+------------------------------------------------------------------
 
 lamU :: Token -> Token -> Token -> [Term] -> Term
-lamU barTk (Token (_, _, name)) dotTk body =
+lamU barTk (Token (_, TK_Name name)) dotTk body =
     Lam (maybe NoInfo PosInfo (barTk `span` body)) name Nothing (tsToT body)
 
 lamT :: Token -> Token -> Token -> Type -> Token -> [Term] -> Term
-lamT barTk (Token (_ ,_ ,name)) colonTk ty dotTk body =
+lamT barTk (Token (_, TK_Name name)) colonTk ty dotTk body =
     Lam (maybe NoInfo PosInfo (barTk `span` body)) name (Just ty) (tsToT body)
 
 var :: Token -> Term
-var varTk@(Token (_, (AlexPn _ r c), name)) =
-    Var (PosInfo (Pos r c r (c + length name))) name
+var varTk@(Token (pos, TK_Name name)) = Var (maybe NoInfo PosInfo pos) name
+
+lt :: Token -> Token -> Token -> [Term] -> Token -> [Term] -> Term
+lt letTk (Token (_, TK_Name name)) eqTk def inTk body =
+    Let (maybe NoInfo PosInfo (letTk `span` body)) name (tsToT def) (tsToT body)
+
+fix :: Token -> Term
+fix (Token (pos, TK_Fix)) = Fix (maybe NoInfo PosInfo pos)
 
 cond :: Token -> [Term] -> Token -> [Term] -> Token -> [Term] -> Token -> Term
 cond ifTk gd thenTk tbr elseTk fbr endTk =
@@ -110,14 +117,10 @@ tl :: Token -> [Term] -> Term
 tl tlTk body = Tl (maybe NoInfo PosInfo (tlTk `span` body)) (tsToT body)
 
 nil :: Token -> Term
-nil (Token (_, AlexPn _ r c, s)) = Nil $ PosInfo $ Pos r c r (c + length s)
+nil (Token (pos, TK_Nil)) = Nil $ maybe NoInfo PosInfo pos
 
 parens :: Token -> [Term] -> Token -> Term
 parens lpTk body rpTk = tsToT body
-
-lt :: Token -> Token -> Token -> [Term] -> Token -> [Term] -> Term
-lt letTk (Token (_, _, name)) eqTk def inTk body =
-    Let (maybe NoInfo PosInfo (letTk `span` body)) name (tsToT def) (tsToT body)
 
 tsToT :: [Term] -> Term
 tsToT [ ] = error "tsToT of []"

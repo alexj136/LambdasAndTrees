@@ -1,0 +1,12 @@
+let id = | x .
+    x
+in
+
+let f =
+    id id
+in
+
+let t =
+    id nil
+in
+    t

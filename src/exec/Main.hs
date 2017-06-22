@@ -33,7 +33,7 @@ main = do
 
 runPipeline :: String -> Result P.Term
 runPipeline progText = do
-    let tokens = alexScanTokens progText
+    (names, nextName, tokens) <- scan progText
     sugarAST <- parse tokens
     ty       <- check sugarAST
     if ty /= TTree then

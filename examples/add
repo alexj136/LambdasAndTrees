@@ -1,8 +1,20 @@
-#include "../lat_stdlib.h"
-add (
-    add (
-        oneplus (oneplus zero) ,
-        oneplus zero
-    ),
-    oneplus (oneplus (oneplus zero))
-)
+// addition function
+let add = fix | add . | a . | b .
+    if a then
+        add (> a) (nil.b)
+    else
+        b
+    end
+in
+
+// successor function
+let oneplus = | a .
+    (nil.a)
+in
+
+let zero =
+    nil
+in
+
+    add (add (oneplus (oneplus zero)) (oneplus zero))
+        (oneplus (oneplus (oneplus zero)))

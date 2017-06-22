@@ -19,6 +19,12 @@ newtype Name = Name Integer deriving (Eq, Ord)
 instance Show Name where
     show (Name n) = "__NAME" ++ show n ++ "__"
 
+after :: Name -> Name
+after (Name n) = Name (n + 1)
+
+(!?) :: M.Map Name String -> Name -> String
+(!?) map name = maybe (show name) show (M.lookup name map)
+
 ----------------------------------------------------------
 -- Class for things that can have source code positions --
 ----------------------------------------------------------
@@ -36,6 +42,9 @@ data Pos = Pos
 instance Show Pos where
     show (Pos sR sC eR eC) = "(row " ++ show sR ++ ", col "
         ++ show sC ++ ") -- (row " ++ show eR ++ ", col " ++ show eC ++ ")"
+
+showMPos :: Maybe Pos -> String
+showMPos = maybe "[NO POSITION DATA]" show
 
 instance Positionable a => Positionable [a] where
     getPos as | length as == 0 = Nothing
