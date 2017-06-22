@@ -1,4 +1,0 @@
-#!/bin/sh
-cpp -P $1 -o .tmp
-./dist/build/LambdasAndTrees/LambdasAndTrees .tmp
-rm .tmp
