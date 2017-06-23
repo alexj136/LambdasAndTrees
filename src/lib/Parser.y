@@ -31,6 +31,7 @@ import Control.Monad.Except (throwError)
     Else    { Token ( _ , TK_Else   ) }
     End     { Token ( _ , TK_End    ) }
     Let     { Token ( _ , TK_Let    ) }
+    Rec     { Token ( _ , TK_Rec    ) }
     Eq      { Token ( _ , TK_Eq     ) }
     In      { Token ( _ , TK_In     ) }
     Fix     { Token ( _ , TK_Fix    ) }
@@ -53,6 +54,7 @@ TERM
     | Name                      %prec var  { var    $1                   }
     | If TS Then TS Else TS End %prec cond { cond   $1 $2 $3 $4 $5 $6 $7 }
     | Let Name Eq TS In TS                 { lt     $1 $2 $3 $4 $5 $6    }
+    | Let Rec Name Eq TS In TS             { ltrc   $1 $2 $3 $4 $5 $6 $7 }
     | Fix                                  { fix    $1                   }
     | LParen TS Dot TS RParen   %prec cons { cons   $1 $2 $3 $4 $5       }
     | Hd TS                                { hd     $1 $2                }
@@ -97,6 +99,10 @@ var varTk@(Token (pos, TK_Name name)) = Var (maybe NoInfo PosInfo pos) name
 lt :: Token -> Token -> Token -> [Term] -> Token -> [Term] -> Term
 lt letTk (Token (_, TK_Name name)) eqTk def inTk body =
     Let (maybe NoInfo PosInfo (letTk `span` body)) name (tsToT def) (tsToT body)
+
+ltrc :: Token -> Token -> Token -> Token -> [Term] -> Token -> [Term] -> Term
+ltrc letTk recTk (Token (_, TK_Name name)) eqTk def inTk body = LetR
+    (maybe NoInfo PosInfo (letTk `span` body)) name (tsToT def) (tsToT body)
 
 fix :: Token -> Term
 fix (Token (pos, TK_Fix)) = Fix (maybe NoInfo PosInfo pos)

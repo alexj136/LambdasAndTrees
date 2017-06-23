@@ -93,6 +93,7 @@ constraints env tm = case tm of
         b' <- subst d x b
         tyB' <- constraints env b'
         return tyB'
+    LetR i x d b -> constraints env (unLetR i x d b)
     Fix _ -> do
         n <- fresh
         return $ ((TVar n) `TFunc` (TVar n)) `TFunc` (TVar n)
@@ -146,6 +147,13 @@ constraints env tm = case tm of
             liftM2 (Let i (Name n)) (subst arg x d) (subst arg x b')
         Let i y d b | otherwise ->
             liftM2 (Let i y) (subst arg x d) (subst arg x b)
+        LetR _ y _ _ | y == x -> return body
+        LetR i y d b | y `S.member` free arg -> do
+            n <- fresh
+            b' <- subst (Var NoInfo (Name n)) y b
+            liftM2 (Let i (Name n)) (subst arg x d) (subst arg x b')
+        LetR i y d b | otherwise ->
+            liftM2 (Let i y) (subst arg x d) (subst arg x b)
         Fix i -> return $ Fix i
         Cond i gd tbr fbr ->
             liftM3 (Cond i) (subst arg x gd) (subst arg x tbr) (subst arg x fbr)
@@ -156,13 +164,14 @@ constraints env tm = case tm of
 
     free :: Term -> S.Set Name
     free tm = case tm of
-        Lam _ x _ body    -> S.delete x (free body)
-        Var _ x           -> S.singleton x
-        App _ func arg    -> free func `S.union` free arg
-        Let _ x d b       -> free d `S.union` (S.delete x (free b))
-        Fix _             -> S.empty
+        Lam  _ x _ body   -> S.delete x (free body)
+        Var  _ x          -> S.singleton x
+        App  _ func arg   -> free func `S.union` free arg
+        Let  _ x d b      -> free d `S.union` (S.delete x (free b))
+        LetR _ x d b      -> free d `S.union` (S.delete x (free b))
+        Fix  _            -> S.empty
         Cond _ gd tbr fbr -> free gd `S.union` free tbr `S.union` free fbr
         Cons _ l r        -> free l `S.union` free r
-        Hd _ e            -> free e
-        Tl _ e            -> free e
-        Nil _             -> S.empty
+        Hd   _ e          -> free e
+        Tl   _ e          -> free e
+        Nil  _            -> S.empty

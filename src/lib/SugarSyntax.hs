@@ -13,6 +13,7 @@ data Term
     | Var  Info Name
     | App  Info Term Term
     | Let  Info Name Term Term
+    | LetR Info Name Term Term
     | Fix  Info
     | Cond Info Term Term Term
     | Cons Info Term Term
@@ -30,6 +31,7 @@ instance Positionable Term where
         Var  (PosInfo pos) _     -> Just pos
         App  (PosInfo pos) _ _   -> Just pos
         Let  (PosInfo pos) _ _ _ -> Just pos
+        LetR (PosInfo pos) _ _ _ -> Just pos
         Fix  (PosInfo pos)       -> Just pos
         Cond (PosInfo pos) _ _ _ -> Just pos
         Cons (PosInfo pos) _ _   -> Just pos
@@ -73,6 +75,11 @@ prettyPrint = pp 0 where
                 ++ (pp (indent + 1) names n) ++ ")"
         Let  _ x d b        ->
             "(let " ++ names !? x ++ " = "
+                ++ (pp (indent + 1) names d) ++ " in \n"
+            ++ tab (indent + 1) ++ (pp (indent + 1) names b)
+            ++ tab  indent      ++ ")"
+        LetR _ x d b        ->
+            "(let rec" ++ names !? x ++ " = "
                 ++ (pp (indent + 1) names d) ++ " in \n"
             ++ tab (indent + 1) ++ (pp (indent + 1) names b)
             ++ tab  indent      ++ ")"
@@ -120,6 +127,13 @@ debugPrint = pp 0 where
             ++ pp (indent + 2) d
             ++ "\n" ++ tab (indent + 1) ++ "| SCOPE = "
             ++ pp (indent + 2) b
+        LetR i x d b        ->
+            "\n" ++ tab indent ++ "| LET REC " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| BINDER = " ++ show x
+            ++ "\n" ++ tab (indent + 1) ++ "| DEFINITION = "
+            ++ pp (indent + 2) d
+            ++ "\n" ++ tab (indent + 1) ++ "| SCOPE = "
+            ++ pp (indent + 2) b
         Fix  i              ->
             "\n" ++ tab indent ++ "| FIX " ++ show i
         Cond i g t f        ->
@@ -160,6 +174,7 @@ desugar = let
         App  _ f a   -> liftM2 P.App  (desug ns f) (desug ns a)
         Let  i x d b ->
             liftM2 P.App (desug ns (Lam i x Nothing b)) (desug ns d)
+        LetR i x d b -> desug ns $ unLetR i x d b
         Fix  _       -> return P.Fix
         Cond _ g t f -> liftM3 P.Cond (desug ns g) (desug ns t) (desug ns f)
         Cons _ l r   -> liftM2 P.Cons (desug ns l) (desug ns r)
@@ -167,3 +182,7 @@ desugar = let
         Tl   _ t     -> liftM  P.Tl   (desug ns t)
         Nil  _       -> return P.Nil
     in desug M.empty
+
+-- Convert a let rec into a let with fix
+unLetR :: Info -> Name -> Term -> Term -> Term
+unLetR i x d b = Let i x (App NoInfo (Fix NoInfo) (Lam NoInfo x Nothing d)) b

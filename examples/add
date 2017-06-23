@@ -1,5 +1,5 @@
 // addition function
-let add = fix | add . | a . | b .
+let rec add = | a . | b .
     if a then
         add (> a) (nil.b)
     else

@@ -25,6 +25,7 @@ tokens :-
     "else"                 { mkTK TK_Else   }
     "end"                  { mkTK TK_End    }
     "let"                  { mkTK TK_Let    }
+    "rec"                  { mkTK TK_Rec    }
     "="                    { mkTK TK_Eq     }
     "in"                   { mkTK TK_In     }
     "fix"                  { mkTK TK_Fix    }
@@ -56,6 +57,7 @@ data TokenType
     | TK_Else
     | TK_End
     | TK_Let
+    | TK_Rec
     | TK_Eq
     | TK_In
     | TK_Fix
