@@ -78,7 +78,7 @@ prettyPrint = pp 0 where
             ++ tab  indent      ++ ")"
         Fix  _              -> "fix"
         Cond _ g t f        ->
-            "if " ++ show g ++ " then\n"
+            "if " ++ (pp indent names g) ++ " then\n"
             ++ tab (indent + 1) ++ (pp (indent + 1) names t) ++ "\n"
             ++ tab  indent      ++ "else \n"
             ++ tab (indent + 1) ++ (pp (indent + 1) names f) ++ "\n"

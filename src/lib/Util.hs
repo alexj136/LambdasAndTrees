@@ -23,7 +23,7 @@ after :: Name -> Name
 after (Name n) = Name (n + 1)
 
 (!?) :: M.Map Name String -> Name -> String
-(!?) map name = maybe (show name) show (M.lookup name map)
+(!?) map name = maybe (show name) id (M.lookup name map)
 
 ----------------------------------------------------------
 -- Class for things that can have source code positions --

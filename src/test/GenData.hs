@@ -1,5 +1,6 @@
 module GenData where
 
+import Util
 import SugarSyntax
 import Types
 
@@ -20,9 +21,10 @@ arbitraryType = arbitrary
 -- lexer's RE) but useful nonetheless. In order for parser tests to be useful,
 -- we disallow the empty string and the various keywords that could also be
 -- variable names.
-genVarName :: Gen String
-genVarName = (listOf $ elements $ ['a'..'z'] ++ ['A'..'Z']) `suchThat`
-    (\s -> s `notElem` ["", "let", "in", "nil", "if", "then", "else", "end"])
+genVarName :: Gen Name
+genVarName = do
+    id <- elements [0..51]
+    return $ Name id
 
 instance Arbitrary Term where
     arbitrary = frequency
@@ -30,6 +32,7 @@ instance Arbitrary Term where
         , ( 9, liftM2 Var  nfo genVarName                     )
         , ( 2, liftM3 App  nfo arbitrary  arbitrary           )
         , ( 2, liftM4 Let  nfo genVarName arbitrary arbitrary )
+        , ( 4, liftM  Fix  nfo                                )
         , ( 1, liftM4 Cond nfo arbitrary  arbitrary arbitrary )
         , ( 2, liftM3 Cons nfo arbitrary  arbitrary           )
         , ( 4, liftM2 Hd   nfo arbitrary                      )
@@ -58,7 +61,7 @@ typeSafeTerm = genTypeSafeTerm 5 M.empty
 --  (e.g. 5) are perfectly sufficient for generating interesting programs.
 --  A value like 20 would be far too high and would take a VERY long time to
 --  terminate.
-genTypeSafeTerm :: Integer -> M.Map String Type -> Type -> Gen Term
+genTypeSafeTerm :: Integer -> M.Map Name Type -> Type -> Gen Term
 genTypeSafeTerm depth env ty = frequency $ case ty of
     -- If the goal type is TTree and there are no bound of this type, pick
     -- a term from tTreeRest (see below).
@@ -77,9 +80,7 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
 
     where
 
-    md, ex, eq, cn :: Int
-    -- probability of generating something to make the term really grow
-    md = if depth <= 1 then 0 else 1
+    ex, eq, cn :: Int
     -- probability of generating something to make the term grow
     ex = if depth <= 1 then 0 else 4
     -- probability of generating something to keep the term about the same size
@@ -93,19 +94,19 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
 
     -- Make a recursive call but add a new name to the environment for the
     -- recursive call
-    recurseWith :: String -> Type -> Type -> Gen Term
+    recurseWith :: Name -> Type -> Type -> Gen Term
     recurseWith newName typeOfNewName =
         genTypeSafeTerm (depth - 1) (M.insert newName typeOfNewName env)
 
     -- Get all names of a given type from an environment
-    namesOfType :: Type -> [String]
+    namesOfType :: Type -> [Name]
     namesOfType ty = M.keys $ M.filter (== ty) env
 
     -- Possible TTree type expressions to generate, without variables
     tTreeRest :: [(Int, Gen Term)]
     tTreeRest =
         [ ( ex, application TTree                                             )
-        , ( md, letE TTree                                                    )
+        , ( ex, letE TTree                                                    )
         , ( ex, liftM4 Cond nfo (recurse TTree)(recurse TTree)(recurse TTree) )
         , ( ex, liftM3 Cons nfo (recurse TTree)(recurse TTree)                )
         , ( eq, liftM2 Tl   nfo (recurse TTree)                               )
@@ -118,7 +119,7 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
     tFuncRest argTy retTy =
         [ ( cn, lambda argTy retTy                                        )
         , ( ex, application ty                                            )
-        --, ( ex, letE (TFunc argTy retTy)                                  )
+        , ( ex, letE (TFunc argTy retTy)                                  )
         , ( ex, liftM4 Cond nfo (recurse TTree) (recurse ty) (recurse ty) )
         ]
 

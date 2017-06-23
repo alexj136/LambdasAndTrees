@@ -2,17 +2,18 @@ module TestParser where
 
 import TestUtil
 import GenData
+import Util
 import Lexer
 import Parser
+import SugarSyntax
 
+import qualified Data.Map as M
 import Test.QuickCheck
 import Test.Framework (testGroup)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 
-tests = testGroup "Parser tests"
-    [ testProperty "unparseAndParseIsSame" unparseAndParseIsSame
-    ]
+import Debug.Trace
 
-unparseAndParseIsSame :: Property
-unparseAndParseIsSame = forAll arbitraryTerm
-    (\tm -> (parse . alexScanTokens . show) tm == return tm)
+tests = testGroup "Parser tests"
+    [
+    ]
