@@ -6,7 +6,7 @@ import SugarSyntax
 
 import Data.Maybe (fromMaybe)
 import Control.Monad.State
-import Control.Monad.Except (throwError)
+import Control.Monad.Except
 import Control.Monad.Writer.Lazy
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -22,11 +22,11 @@ newtype Constraint = Constraint (Type, Type, Term) deriving (Show, Ord)
 instance Eq Constraint where
     Constraint (a, b, _) == Constraint (c, d, _) = (a, b) == (c, d)
 
-check :: Term -> Result Type
+check :: Term -> StateT Name Result Type
 check tm = do
-    ((ty, _), constrs) <- runWriterT $ runStateT (constraints M.empty tm) 0
-    unifyFn <- unify constrs
-    return $ unifyFn ty
+    (ty, constrs) <- runWriterT $ constraints M.empty tm
+    unifier       <- lift $ unify constrs
+    return $ unifier ty
 
 unify :: Constraints -> Result (Type -> Type)
 unify constrs = if null constrs then return id else
@@ -48,31 +48,30 @@ unify constrs = if null constrs then return id else
 
     where
 
-    handleVar :: Integer -> Type -> Constraints -> Result (Type -> Type)
+    handleVar :: Name -> Type -> Constraints -> Result (Type -> Type)
     handleVar x ty rest = do
         unifyRest <- unify (S.map (constrSub x ty) rest)
         return $ unifyRest . (tySub x ty)
 
-    constrSub :: Integer -> Type -> Constraint -> Constraint
+    constrSub :: Name -> Type -> Constraint -> Constraint
     constrSub x ty (Constraint (t1, t2, tm)) =
         Constraint (tySub x ty t1, tySub x ty t2, tm)
 
-    tySub :: Integer -> Type -> Type -> Type
+    tySub :: Name -> Type -> Type -> Type
     tySub from to within = case within of
         TVar  x   -> if x == from then to else TVar x
         TFunc a b -> TFunc (tySub from to a) (tySub from to b)
         TTree     -> TTree
 
-    occurs :: Integer -> Type -> Bool
+    occurs :: Name -> Type -> Bool
     occurs x (TVar  y  ) = x == y
     occurs x (TFunc a b) = occurs x a || occurs x b
     occurs x  TTree      = False
 
-constraints :: Env -> Term ->
-    StateT Integer (WriterT Constraints Result) Type
+constraints :: Env -> Term -> WriterT Constraints (StateT Name Result) Type
 constraints env tm = case tm of
     Lam _ x Nothing body -> do
-        n <- fresh
+        n <- lift fresh
         let newEnv = M.insert x (TVar n) env
         tyBody <- constraints newEnv body
         return $ TFunc (TVar n) tyBody
@@ -84,18 +83,18 @@ constraints env tm = case tm of
         Just ty -> return ty
         Nothing -> throwError $ "Unbound name '" ++ show x ++ "': " ++ show i
     App _ func arg -> do
-        n <- fresh
+        n <- lift fresh
         tyFunc <- constraints env func
         tyArg  <- constraints env arg
         constrain tyFunc (TFunc tyArg (TVar n)) tm
         return $ TVar n
     Let _ x d b -> do
-        b' <- subst d x b
+        b' <- lift $ subst d x b
         tyB' <- constraints env b'
         return tyB'
     LetR i x d b -> constraints env (unLetR i x d b)
     Fix _ -> do
-        n <- fresh
+        n <- lift fresh
         return $ ((TVar n) `TFunc` (TVar n)) `TFunc` (TVar n)
     Cond _ gd tbr fbr -> do
         tyGd  <- constraints env gd
@@ -122,38 +121,43 @@ constraints env tm = case tm of
 
     where
 
-    fresh :: Monad m => StateT Integer m Integer
-    fresh = state $ \n -> (n, n + 1)
+    fresh :: Monad m => StateT Name m Name
+    fresh = state $ \n -> (n, after n)
 
-    constrain :: MonadTrans m => Monad n => Type -> Type -> Term ->
-        m (WriterT Constraints n) ()
-    constrain t1 t2 tm = lift $ tell $ S.singleton (Constraint (t1, t2, tm))
+    constrain :: Monad m => Type -> Type -> Term -> WriterT Constraints m ()
+    constrain t1 t2 tm = tell $ S.singleton (Constraint (t1, t2, tm))
 
-    subst :: Monad m => Term -> Name -> Term -> StateT Integer m Term
+    subst :: Monad m => Term -> Name -> Term -> StateT Name m Term
     subst arg x body = case body of
-        Lam _ y _ _ | y == x -> return body
-        Lam i y ty b | y `S.member` free arg -> do
-            n <- fresh
-            b' <- subst (Var NoInfo (Name n)) y b
-            liftM (Lam i (Name n) ty) (subst arg x b')
-        Lam i y ty b | otherwise -> liftM (Lam i y ty) (subst arg x b)
-        Var i y | x == y -> return arg
-        Var i y | x /= y -> return body
+        Lam i y t b ->
+            if y == x then
+                return body
+            else if y `S.member` freeVars arg then do
+                n <- fresh
+                b' <- subst (Var NoInfo n) y b
+                liftM (Lam i n t) (subst arg x b')
+            else
+                liftM (Lam i y t) (subst arg x b)
+        Let i y d b ->
+            if y == x then
+                return body
+            else if y `S.member` freeVars arg then do
+                n <- fresh
+                b' <- subst (Var NoInfo n) y b
+                liftM2 (Let i n) (subst arg x d) (subst arg x b')
+            else
+                liftM2 (Let i y) (subst arg x d) (subst arg x b)
+        LetR i y d b ->
+            if y == x then
+                return body
+            else if y `S.member` freeVars arg then do
+                n <- fresh
+                b' <- subst (Var NoInfo n) y b
+                liftM2 (Let i n) (subst arg x d) (subst arg x b')
+            else
+                liftM2 (Let i y) (subst arg x d) (subst arg x b)
+        Var i y -> return $ if x == y then arg else body
         App i f a -> liftM2 (App i) (subst arg x f) (subst arg x a)
-        Let _ y _ _ | y == x -> return body
-        Let i y d b | y `S.member` free arg -> do
-            n <- fresh
-            b' <- subst (Var NoInfo (Name n)) y b
-            liftM2 (Let i (Name n)) (subst arg x d) (subst arg x b')
-        Let i y d b | otherwise ->
-            liftM2 (Let i y) (subst arg x d) (subst arg x b)
-        LetR _ y _ _ | y == x -> return body
-        LetR i y d b | y `S.member` free arg -> do
-            n <- fresh
-            b' <- subst (Var NoInfo (Name n)) y b
-            liftM2 (Let i (Name n)) (subst arg x d) (subst arg x b')
-        LetR i y d b | otherwise ->
-            liftM2 (Let i y) (subst arg x d) (subst arg x b)
         Fix i -> return $ Fix i
         Cond i gd tbr fbr ->
             liftM3 (Cond i) (subst arg x gd) (subst arg x tbr) (subst arg x fbr)
@@ -161,17 +165,3 @@ constraints env tm = case tm of
         Hd i e -> liftM (Hd i) (subst arg x e)
         Tl i e -> liftM (Tl i) (subst arg x e)
         Nil i -> return $ Nil i
-
-    free :: Term -> S.Set Name
-    free tm = case tm of
-        Lam  _ x _ body   -> S.delete x (free body)
-        Var  _ x          -> S.singleton x
-        App  _ func arg   -> free func `S.union` free arg
-        Let  _ x d b      -> free d `S.union` (S.delete x (free b))
-        LetR _ x d b      -> free d `S.union` (S.delete x (free b))
-        Fix  _            -> S.empty
-        Cond _ gd tbr fbr -> free gd `S.union` free tbr `S.union` free fbr
-        Cons _ l r        -> free l `S.union` free r
-        Hd   _ e          -> free e
-        Tl   _ e          -> free e
-        Nil  _            -> S.empty

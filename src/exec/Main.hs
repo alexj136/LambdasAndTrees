@@ -13,6 +13,7 @@ import CodeGen
 import System.Exit
 import System.Environment (getArgs)
 import Control.Monad.Except
+import Control.Monad.State
 
 main :: IO ExitCode
 main = do
@@ -35,7 +36,7 @@ runPipeline :: String -> Result P.Term
 runPipeline progText = do
     (names, nextName, tokens) <- scan progText
     sugarAST <- parse tokens
-    ty       <- check sugarAST
+    (ty, _) <- runStateT (check sugarAST) nextName
     if ty /= TTree then
         throwError
             $ "Program has type '" ++ show ty ++ "'. Valid programs have "

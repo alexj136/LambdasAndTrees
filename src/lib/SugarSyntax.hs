@@ -7,6 +7,7 @@ import qualified DeBruijnSyntax as P
 import Control.Monad (liftM, liftM2, liftM3)
 import Control.Monad.Except (throwError)
 import qualified Data.Map as M
+import qualified Data.Set as S
 
 data Term
     = Lam  Info Name (Maybe Type) Term
@@ -51,6 +52,21 @@ instance Eq Info where
 
 infoFromPositionable :: Positionable a => a -> Info
 infoFromPositionable = maybe NoInfo PosInfo . getPos
+
+-- Get the free name in a term
+freeVars :: Term -> S.Set Name
+freeVars tm = case tm of
+    Lam  _ x t b -> S.delete x (freeVars b)
+    Var  _ x     -> S.singleton x
+    App  _ f a   -> freeVars f `S.union` freeVars a
+    Let  _ x d b -> freeVars d `S.union` (S.delete x (freeVars b))
+    LetR _ x d b -> freeVars d `S.union` (S.delete x (freeVars b))
+    Fix  _       -> S.empty
+    Cond _ g t f -> freeVars g `S.union` freeVars t `S.union` freeVars f
+    Cons _ l r   -> freeVars l `S.union` freeVars r
+    Hd   _ e     -> freeVars e
+    Tl   _ e     -> freeVars e
+    Nil  _       -> S.empty
 
 -- Convert the indentation-level to a string
 tab :: Integer -> String

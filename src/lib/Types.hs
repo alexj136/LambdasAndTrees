@@ -1,6 +1,8 @@
 module Types where
 
-data Type = TTree | TFunc Type Type | TVar Integer deriving (Eq, Ord)
+import Util
+
+data Type = TTree | TFunc Type Type | TVar Name deriving (Eq, Ord)
 
 instance Show Type where
     show t = case t of
