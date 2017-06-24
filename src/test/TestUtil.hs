@@ -6,6 +6,8 @@ module TestUtil where
 import qualified Util as U
 import SugarSyntax
 import Types
+
+import Data.Map (empty)
 import Test.QuickCheck (Testable, property)
 import Test.QuickCheck.Property (failed, reason)
 import Control.Monad.Except (runExcept)
@@ -13,7 +15,7 @@ import Control.Monad.Except (runExcept)
 instance Testable t => Testable (U.Result t) where
     property p = case runExcept p of
         Right e -> property e
-        Left  s -> property $ failed { reason = s }
+        Left  s -> property $ failed { reason = s empty }
 
 instance Testable Type where
     property _ = property True
