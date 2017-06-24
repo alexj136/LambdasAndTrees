@@ -76,7 +76,7 @@ parse :: [Token] -> Result Term
 parse = (fmap tsToT) . parseTS
 
 parseError :: [Token] -> Result a
-parseError tokens = throwError $ case tokens of
+parseError tokens = throwBasic $ case tokens of
     []                     -> "Reached end of file while parsing"
     (Token (pos, tk):rest) ->
         "Parse error: " ++ showMPos pos

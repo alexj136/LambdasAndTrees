@@ -8,7 +8,11 @@ import Control.Monad.Except
 -- Result Monad --
 ------------------
 
-type Result = Except String
+type Result = Except (M.Map Name String -> String)
+
+-- Throw an error that doesn't require name map conversion
+throwBasic :: String -> Result a
+throwBasic s = throwError $ \_ -> s
 
 -------------------
 -- The Name type --
@@ -24,6 +28,9 @@ after (Name n) = Name (n + 1)
 
 (!?) :: M.Map Name String -> Name -> String
 (!?) map name = maybe (show name) id (M.lookup name map)
+
+swap :: Ord a => Ord b => M.Map a b -> M.Map b a
+swap = M.fromList . map (\(k,v) -> (v,k)) . M.toList
 
 ----------------------------------------------------------
 -- Class for things that can have source code positions --

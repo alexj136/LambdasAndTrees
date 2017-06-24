@@ -10,7 +10,7 @@ eval tm = case tm of
 
     Lam _ -> return tm
 
-    Var _ -> throwError "Implementation error - free Var reached eval"
+    Var _ -> throwBasic "Implementation error - free Var reached eval"
 
     App (Lam body) (arg) -> eval (shift (-1) 0 (sub 0 (shift 1 0 arg) body))
 
@@ -38,13 +38,13 @@ eval tm = case tm of
         evE <- eval e
         case evE of
             Cons h _ -> return h
-            Nil      -> throwError "< nil"
+            Nil      -> throwBasic "< nil"
 
     Tl e -> do
         evE <- eval e
         case evE of
             Cons _ t -> return t
-            Nil      -> throwError "> nil"
+            Nil      -> throwBasic "> nil"
 
     Nil -> return Nil
 

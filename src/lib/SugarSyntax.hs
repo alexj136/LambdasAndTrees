@@ -186,7 +186,7 @@ desugar = let
         Lam  _ n _ b -> liftM P.Lam (desug (M.insert n 0 (M.map (+1) ns)) b)
         Var  _ n     -> case M.lookup n ns of
             Just x  -> return $ P.Var x
-            Nothing -> throwError $ "Unbound variable '" ++ show n ++ "'."
+            Nothing -> throwError $ \m -> "Unbound variable '" ++ m !? n ++ "'."
         App  _ f a   -> liftM2 P.App  (desug ns f) (desug ns a)
         Let  i x d b ->
             liftM2 P.App (desug ns (Lam i x Nothing b)) (desug ns d)

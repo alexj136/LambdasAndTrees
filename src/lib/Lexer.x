@@ -75,7 +75,7 @@ data TokenType
     deriving (Show, Eq)
 
 scan :: String -> Result (M.Map String Name, Name, [Token])
-scan = (either throwError return) . lexer
+scan = (either throwBasic return) . lexer
 
 lexer :: String -> Either String (M.Map String Name, Name, [Token])
 lexer s = runAlex s loop where

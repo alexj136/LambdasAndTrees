@@ -42,9 +42,9 @@ unify constrs = if null constrs then return id else
             S.insert (Constraint (a1, a2, tm)) $
             S.insert (Constraint (b1, b2, tm)) $ rest
 
-        Constraint (ty1, ty2, tm) -> throwError
-            $ "Unsatisfiable type constraint at " ++ showMPos (getPos tm)
-            ++ "\nin expression:\n" ++ show tm
+        Constraint (ty1, ty2, tm) -> throwError $ \m ->
+            "Unsatisfiable type constraint at " ++ showMPos (getPos tm)
+            ++ "\nin expression:\n" ++ prettyPrint m tm
 
     where
 
@@ -81,7 +81,8 @@ constraints env tm = case tm of
         return $ TFunc tyX tyBody
     Var i x -> case M.lookup x env of
         Just ty -> return ty
-        Nothing -> throwError $ "Unbound name '" ++ show x ++ "': " ++ show i
+        Nothing -> throwError $
+            \m -> "Unbound name '" ++ m !? x ++ "': " ++ show i
     App _ func arg -> do
         n <- lift fresh
         tyFunc <- constraints env func

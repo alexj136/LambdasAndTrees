@@ -14,6 +14,7 @@ import System.Exit
 import System.Environment (getArgs)
 import Control.Monad.Except
 import Control.Monad.State
+import Data.Map (empty)
 
 main :: IO ExitCode
 main = do
@@ -32,15 +33,16 @@ main = do
             putStrLn "Please supply a single filename."
             exitFailure
 
-runPipeline :: String -> Result P.Term
-runPipeline progText = do
-    (names, nextName, tokens) <- scan progText
-    sugarAST <- parse tokens
-    (ty, _) <- runStateT (check sugarAST) nextName
-    if ty /= TTree then
-        throwError
-            $ "Program has type '" ++ show ty ++ "'. Valid programs have "
-            ++ "type '" ++ show TTree ++ "'."
-    else do
-        pureAST  <- desugar sugarAST
-        eval pureAST
+runPipeline :: String -> Except String P.Term
+runPipeline progText = case runExcept $ scan progText of
+    Left m -> throwError $ m empty
+    Right (names, nextName, tokens) -> withExcept (\m -> m (swap names)) $ do
+        sugarAST <- parse tokens
+        (ty, _) <- runStateT (check sugarAST) nextName
+        if ty /= TTree then
+            throwBasic
+                $ "Program has type '" ++ show ty ++ "'. Valid programs have "
+                ++ "type '" ++ show TTree ++ "'."
+        else do
+            pureAST <- desugar sugarAST
+            eval pureAST
