@@ -13,8 +13,7 @@ data Term
     = Lam  Info Name (Maybe Type) Term
     | Var  Info Name
     | App  Info Term Term
-    | Let  Info Name Term Term
-    | LetR Info Name Term Term
+    | Let  Info Bool Name Term Term
     | Fix  Info
     | Cond Info Term Term Term
     | Cons Info Term Term
@@ -28,17 +27,16 @@ instance Show Term where
 
 instance Positionable Term where
     getPos tm = case tm of
-        Lam  (PosInfo pos) _ _ _ -> Just pos
-        Var  (PosInfo pos) _     -> Just pos
-        App  (PosInfo pos) _ _   -> Just pos
-        Let  (PosInfo pos) _ _ _ -> Just pos
-        LetR (PosInfo pos) _ _ _ -> Just pos
-        Fix  (PosInfo pos)       -> Just pos
-        Cond (PosInfo pos) _ _ _ -> Just pos
-        Cons (PosInfo pos) _ _   -> Just pos
-        Hd   (PosInfo pos) _     -> Just pos
-        Tl   (PosInfo pos) _     -> Just pos
-        Nil  (PosInfo pos)       -> Just pos
+        Lam  (PosInfo pos) _ _ _   -> Just pos
+        Var  (PosInfo pos) _       -> Just pos
+        App  (PosInfo pos) _ _     -> Just pos
+        Let  (PosInfo pos) _ _ _ _ -> Just pos
+        Fix  (PosInfo pos)         -> Just pos
+        Cond (PosInfo pos) _ _ _   -> Just pos
+        Cons (PosInfo pos) _ _     -> Just pos
+        Hd   (PosInfo pos) _       -> Just pos
+        Tl   (PosInfo pos) _       -> Just pos
+        Nil  (PosInfo pos)         -> Just pos
         _ -> Nothing
 
 data Info = PosInfo Pos | NoInfo deriving Ord
@@ -56,17 +54,16 @@ infoFromPositionable = maybe NoInfo PosInfo . getPos
 -- Get the free name in a term
 freeVars :: Term -> S.Set Name
 freeVars tm = case tm of
-    Lam  _ x t b -> S.delete x (freeVars b)
-    Var  _ x     -> S.singleton x
-    App  _ f a   -> freeVars f `S.union` freeVars a
-    Let  _ x d b -> freeVars d `S.union` (S.delete x (freeVars b))
-    LetR _ x d b -> freeVars d `S.union` (S.delete x (freeVars b))
-    Fix  _       -> S.empty
-    Cond _ g t f -> freeVars g `S.union` freeVars t `S.union` freeVars f
-    Cons _ l r   -> freeVars l `S.union` freeVars r
-    Hd   _ e     -> freeVars e
-    Tl   _ e     -> freeVars e
-    Nil  _       -> S.empty
+    Lam  _ x t b   -> S.delete x (freeVars b)
+    Var  _ x       -> S.singleton x
+    App  _ f a     -> freeVars f `S.union` freeVars a
+    Let  _ _ x d b -> freeVars d `S.union` (S.delete x (freeVars b))
+    Fix  _         -> S.empty
+    Cond _ g t f   -> freeVars g `S.union` freeVars t `S.union` freeVars f
+    Cons _ l r     -> freeVars l `S.union` freeVars r
+    Hd   _ e       -> freeVars e
+    Tl   _ e       -> freeVars e
+    Nil  _         -> S.empty
 
 -- Convert the indentation-level to a string
 tab :: Integer -> String
@@ -89,13 +86,8 @@ prettyPrint = pp 0 where
         App  _ m n          ->
             "(" ++ (pp (indent + 1) names m) ++ " "
                 ++ (pp (indent + 1) names n) ++ ")"
-        Let  _ x d b        ->
-            "(let " ++ names !? x ++ " = "
-                ++ (pp (indent + 1) names d) ++ " in \n"
-            ++ tab (indent + 1) ++ (pp (indent + 1) names b)
-            ++ tab  indent      ++ ")"
-        LetR _ x d b        ->
-            "(let rec" ++ names !? x ++ " = "
+        Let  _ r x d b      ->
+            "(let " ++ (if r then "rec " else "") ++ names !? x ++ " = "
                 ++ (pp (indent + 1) names d) ++ " in \n"
             ++ tab (indent + 1) ++ (pp (indent + 1) names b)
             ++ tab  indent      ++ ")"
@@ -136,15 +128,9 @@ debugPrint = pp 0 where
             ++ pp (indent + 2) m
             ++ "\n" ++ tab (indent + 1) ++ "| ARGUMENT = "
             ++ pp (indent + 2) n
-        Let  i x d b        ->
+        Let  i r x d b      ->
             "\n" ++ tab indent ++ "| LET " ++ show i
-            ++ "\n" ++ tab (indent + 1) ++ "| BINDER = " ++ show x
-            ++ "\n" ++ tab (indent + 1) ++ "| DEFINITION = "
-            ++ pp (indent + 2) d
-            ++ "\n" ++ tab (indent + 1) ++ "| SCOPE = "
-            ++ pp (indent + 2) b
-        LetR i x d b        ->
-            "\n" ++ tab indent ++ "| LET REC " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| RECURSIVE = " ++ show r
             ++ "\n" ++ tab (indent + 1) ++ "| BINDER = " ++ show x
             ++ "\n" ++ tab (indent + 1) ++ "| DEFINITION = "
             ++ pp (indent + 2) d
@@ -183,22 +169,25 @@ desugar :: Term -> Result P.Term
 desugar = let
     desug :: M.Map Name Integer -> Term -> Result P.Term
     desug ns t = case t of
-        Lam  _ n _ b -> liftM P.Lam (desug (M.insert n 0 (M.map (+1) ns)) b)
-        Var  _ n     -> case M.lookup n ns of
+        Lam  _ n _ b       ->
+            liftM P.Lam (desug (M.insert n 0 (M.map (+1) ns)) b)
+        Var  _ n           -> case M.lookup n ns of
             Just x  -> return $ P.Var x
             Nothing -> throwError $ \m -> "Unbound variable '" ++ m !? n ++ "'."
         App  _ f a   -> liftM2 P.App  (desug ns f) (desug ns a)
-        Let  i x d b ->
+        Let  i False x d b ->
             liftM2 P.App (desug ns (Lam i x Nothing b)) (desug ns d)
-        LetR i x d b -> desug ns $ unLetR i x d b
-        Fix  _       -> return P.Fix
-        Cond _ g t f -> liftM3 P.Cond (desug ns g) (desug ns t) (desug ns f)
-        Cons _ l r   -> liftM2 P.Cons (desug ns l) (desug ns r)
-        Hd   _ t     -> liftM  P.Hd   (desug ns t)
-        Tl   _ t     -> liftM  P.Tl   (desug ns t)
-        Nil  _       -> return P.Nil
+        Let  i True  x d b -> desug ns $ unLetR i x d b
+        Fix  _             -> return P.Fix
+        Cond _ g t f       ->
+            liftM3 P.Cond (desug ns g) (desug ns t) (desug ns f)
+        Cons _ l r         -> liftM2 P.Cons (desug ns l) (desug ns r)
+        Hd   _ t           -> liftM  P.Hd   (desug ns t)
+        Tl   _ t           -> liftM  P.Tl   (desug ns t)
+        Nil  _             -> return P.Nil
     in desug M.empty
 
 -- Convert a let rec into a let with fix
 unLetR :: Info -> Name -> Term -> Term -> Term
-unLetR i x d b = Let i x (App NoInfo (Fix NoInfo) (Lam NoInfo x Nothing d)) b
+unLetR i x d b =
+    Let i False x (App NoInfo (Fix NoInfo) (Lam NoInfo x Nothing d)) b

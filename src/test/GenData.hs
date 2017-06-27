@@ -4,7 +4,7 @@ import Util
 import SugarSyntax
 import Types
 
-import Control.Monad (liftM, liftM2, liftM3, liftM4)
+import Control.Monad (liftM, liftM2, liftM3, liftM4, liftM5)
 import Test.QuickCheck
 import qualified Data.Map as M
 
@@ -28,17 +28,16 @@ genVarName = do
 
 instance Arbitrary Term where
     arbitrary = frequency
-        [ ( 2 , liftM4 Lam  nfo genVarName arbitrary arbitrary )
-        , ( 10, liftM2 Var  nfo genVarName                     )
-        , ( 2 , liftM3 App  nfo arbitrary  arbitrary           )
-        , ( 2 , liftM4 Let  nfo genVarName arbitrary arbitrary )
-        , ( 2 , liftM4 LetR nfo genVarName arbitrary arbitrary )
-        , ( 5 , liftM  Fix  nfo                                )
-        , ( 1 , liftM4 Cond nfo arbitrary  arbitrary arbitrary )
-        , ( 2 , liftM3 Cons nfo arbitrary  arbitrary           )
-        , ( 5 , liftM2 Hd   nfo arbitrary                      )
-        , ( 5 , liftM2 Tl   nfo arbitrary                      )
-        , ( 10, liftM  Nil  nfo                                )
+        [ ( 2 , liftM4 Lam  nfo genVarName arbitrary  arbitrary           )
+        , ( 10, liftM2 Var  nfo genVarName                                )
+        , ( 2 , liftM3 App  nfo arbitrary  arbitrary                      )
+        , ( 2 , liftM5 Let  nfo arbitrary  genVarName arbitrary arbitrary )
+        , ( 5 , liftM  Fix  nfo                                           )
+        , ( 1 , liftM4 Cond nfo arbitrary  arbitrary  arbitrary           )
+        , ( 2 , liftM3 Cons nfo arbitrary  arbitrary                      )
+        , ( 5 , liftM2 Hd   nfo arbitrary                                 )
+        , ( 5 , liftM2 Tl   nfo arbitrary                                 )
+        , ( 10, liftM  Nil  nfo                                           )
         ]
 
 arbitraryTerm :: Gen Term
@@ -108,7 +107,6 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
     tTreeRest =
         [ ( ex, application TTree                                             )
         , ( ex, letE TTree                                                    )
-        , ( ex, letR TTree                                                    )
         , ( ex, liftM4 Cond nfo (recurse TTree)(recurse TTree)(recurse TTree) )
         , ( ex, liftM3 Cons nfo (recurse TTree)(recurse TTree)                )
         , ( eq, liftM2 Tl   nfo (recurse TTree)                               )
@@ -122,7 +120,6 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
         [ ( cn, lambda argTy retTy                                        )
         , ( ex, application ty                                            )
         , ( ex, letE (TFunc argTy retTy)                                  )
-        , ( ex, letR (TFunc argTy retTy)                                  )
         , ( ex, liftM4 Cond nfo (recurse TTree) (recurse ty) (recurse ty) )
         ]
 
@@ -130,13 +127,7 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
     letE ty = do
         x  <- genVarName
         tX <- if depth <= 1 then return TTree else arbitraryType
-        liftM4 Let nfo (return x) (recurse tX) (recurseWith x tX ty)
-
-    letR :: Type -> Gen Term
-    letR ty = do
-        x  <- genVarName
-        tX <- if depth <= 1 then return TTree else arbitraryType
-        liftM4 LetR nfo (return x) (recurse tX) (recurseWith x tX ty)
+        liftM5 Let nfo arbitrary (return x) (recurse tX) (recurseWith x tX ty)
 
     -- Generate a lambda expression with the given argument and return type
     lambda :: Type -> Type -> Gen Term

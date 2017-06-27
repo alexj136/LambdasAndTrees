@@ -18,7 +18,7 @@ import Control.Monad.Except (throwError)
 
 %left app Name var Hd Tl Fix
 %right cons Dot Arrow At
-%nonassoc Bar Nil cond If Then Else End LParen RParen ulam llam Def
+%nonassoc Bar Nil cond If Then Else End LParen RParen lam Def
 
 %tokentype { Token      }
 %error     { parseError }
@@ -49,12 +49,10 @@ import Control.Monad.Except (throwError)
 
 TERM :: { Term }
 TERM
-    : Bar Name          Dot TS  %prec ulam { lamU   $1 $2 $3 $4          }
-    | Bar Name Colon TY Dot TS  %prec llam { lamT   $1 $2 $3 $4 $5 $6    }
+    : Bar Name MTY Dot TS       %prec lam  { lam    $1 $2 $3 $4 $5       }
     | Name                      %prec var  { var    $1                   }
     | If TS Then TS Else TS End %prec cond { cond   $1 $2 $3 $4 $5 $6 $7 }
-    | Let Name Eq TS In TS                 { lt     $1 $2 $3 $4 $5 $6    }
-    | Let Rec Name Eq TS In TS             { ltrc   $1 $2 $3 $4 $5 $6 $7 }
+    | Let MREC Name Eq TS In TS            { lt     $1 $2 $3 $4 $5 $6 $7 }
     | Fix                                  { fix    $1                   }
     | LParen TS Dot TS RParen   %prec cons { cons   $1 $2 $3 $4 $5       }
     | Hd TS                                { hd     $1 $2                }
@@ -71,6 +69,14 @@ TY
     | At               { TTree       }
     | LParen TY RParen { $2          }
 
+-- An optional colon and type
+MTY :: { Maybe Type }
+MTY : Colon TY { Just $2 } | {- empty -} { Nothing }
+
+-- An optional rec token
+MREC :: { Bool }
+     : Rec { True } | {- empty -} { False }
+
 {
 parse :: [Token] -> Result Term
 parse = (fmap tsToT) . parseTS
@@ -85,24 +91,16 @@ parseError tokens = throwBasic $ case tokens of
 --  TM Production Handlers - thread position info through terms --
 ------------------------------------------------------------------
 
-lamU :: Token -> Token -> Token -> [Term] -> Term
-lamU barTk (Token (_, TK_Name name)) dotTk body =
-    Lam (maybe NoInfo PosInfo (barTk `span` body)) name Nothing (tsToT body)
-
-lamT :: Token -> Token -> Token -> Type -> Token -> [Term] -> Term
-lamT barTk (Token (_, TK_Name name)) colonTk ty dotTk body =
-    Lam (maybe NoInfo PosInfo (barTk `span` body)) name (Just ty) (tsToT body)
+lam :: Token -> Token -> Maybe Type -> Token -> [Term] -> Term
+lam barTk (Token (_, TK_Name name)) ty dotTk body =
+    Lam (maybe NoInfo PosInfo (barTk `span` body)) name ty (tsToT body)
 
 var :: Token -> Term
 var varTk@(Token (pos, TK_Name name)) = Var (maybe NoInfo PosInfo pos) name
 
-lt :: Token -> Token -> Token -> [Term] -> Token -> [Term] -> Term
-lt letTk (Token (_, TK_Name name)) eqTk def inTk body =
-    Let (maybe NoInfo PosInfo (letTk `span` body)) name (tsToT def) (tsToT body)
-
-ltrc :: Token -> Token -> Token -> Token -> [Term] -> Token -> [Term] -> Term
-ltrc letTk recTk (Token (_, TK_Name name)) eqTk def inTk body = LetR
-    (maybe NoInfo PosInfo (letTk `span` body)) name (tsToT def) (tsToT body)
+lt :: Token -> Bool -> Token -> Token -> [Term] -> Token -> [Term] -> Term
+lt letTk r (Token (_, TK_Name name)) eqTk def inTk body = Let
+    (maybe NoInfo PosInfo (letTk `span` body)) r name (tsToT def) (tsToT body)
 
 fix :: Token -> Term
 fix (Token (pos, TK_Fix)) = Fix (maybe NoInfo PosInfo pos)
