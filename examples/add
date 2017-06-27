@@ -1,5 +1,5 @@
 // addition function
-let rec add = | a . | b .
+let rec add: @ -> @ -> @ = | a . | b .
     if a then
         add (> a) (nil.b)
     else
@@ -8,11 +8,11 @@ let rec add = | a . | b .
 in
 
 // successor function
-let oneplus = | a .
+let oneplus: @ -> @ = | a .
     (nil.a)
 in
 
-let zero =
+let zero: @ =
     nil
 in
 

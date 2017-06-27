@@ -49,16 +49,16 @@ import Control.Monad.Except (throwError)
 
 TERM :: { Term }
 TERM
-    : Bar Name MTY Dot TS       %prec lam  { lam    $1 $2 $3 $4 $5       }
-    | Name                      %prec var  { var    $1                   }
-    | If TS Then TS Else TS End %prec cond { cond   $1 $2 $3 $4 $5 $6 $7 }
-    | Let MREC Name Eq TS In TS            { lt     $1 $2 $3 $4 $5 $6 $7 }
-    | Fix                                  { fix    $1                   }
-    | LParen TS Dot TS RParen   %prec cons { cons   $1 $2 $3 $4 $5       }
-    | Hd TS                                { hd     $1 $2                }
-    | Tl TS                                { tl     $1 $2                }
-    | Nil                                  { nil    $1                   }
-    | LParen TS RParen                     { parens $1 $2 $3             }
+    : Bar Name MTY Dot TS       %prec lam  { lam    $1 $2 $3 $4 $5          }
+    | Name                      %prec var  { var    $1                      }
+    | If TS Then TS Else TS End %prec cond { cond   $1 $2 $3 $4 $5 $6 $7    }
+    | Let MREC Name MTY Eq TS In TS        { lt     $1 $2 $3 $4 $5 $6 $7 $8 }
+    | Fix                                  { fix    $1                      }
+    | LParen TS Dot TS RParen   %prec cons { cons   $1 $2 $3 $4 $5          }
+    | Hd TS                                { hd     $1 $2                   }
+    | Tl TS                                { tl     $1 $2                   }
+    | Nil                                  { nil    $1                      }
+    | LParen TS RParen                     { parens $1 $2 $3                }
 
 TS :: { [Term] }
 TS : TERM TS { $1 : $2 } | TERM { [$1] }
@@ -98,9 +98,11 @@ lam barTk (Token (_, TK_Name name)) ty dotTk body =
 var :: Token -> Term
 var varTk@(Token (pos, TK_Name name)) = Var (maybe NoInfo PosInfo pos) name
 
-lt :: Token -> Bool -> Token -> Token -> [Term] -> Token -> [Term] -> Term
-lt letTk r (Token (_, TK_Name name)) eqTk def inTk body = Let
-    (maybe NoInfo PosInfo (letTk `span` body)) r name (tsToT def) (tsToT body)
+lt :: Token -> Bool -> Token -> Maybe Type ->
+   Token -> [Term] -> Token -> [Term] -> Term
+lt letTk r (Token (_, TK_Name name)) ty eqTk def inTk body =
+    Let (maybe NoInfo PosInfo (letTk `span` body))
+        r name ty (tsToT def) (tsToT body)
 
 fix :: Token -> Term
 fix (Token (pos, TK_Fix)) = Fix (maybe NoInfo PosInfo pos)

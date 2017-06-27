@@ -1,6 +1,6 @@
 // An example of recursion. A sort of reverse function.
 
-let f = fix | f . | x .
+let rec f: @ -> @ = | x .
     if x then
         ( nil . f ( < x ) )
     else

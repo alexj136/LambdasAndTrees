@@ -48,15 +48,15 @@ frees tm = case tm of
 
 elimFrees :: Z.Term -> NoFrTm
 elimFrees tm = case tm of
-    Z.Var  _ x       -> NoFrVar   x
-    Z.App  _ m n     -> NoFrApp  (elimFrees m) [elimFrees n]
-    Z.Cond _ g t f   -> NoFrCond (elimFrees g) (elimFrees t) (elimFrees f)
-    Z.Cons _ l r     -> NoFrCons (elimFrees l) (elimFrees r)
-    Z.Hd   _ t       -> NoFrHd $  elimFrees t
-    Z.Tl   _ t       -> NoFrTl $  elimFrees t
-    Z.Nil  _         -> NoFrNil
-    Z.Let  _ _ _ _ _ -> undefined
-    Z.Lam  _ x _ m   ->
+    Z.Var  _ x         -> NoFrVar   x
+    Z.App  _ m n       -> NoFrApp  (elimFrees m) [elimFrees n]
+    Z.Cond _ g t f     -> NoFrCond (elimFrees g) (elimFrees t) (elimFrees f)
+    Z.Cons _ l r       -> NoFrCons (elimFrees l) (elimFrees r)
+    Z.Hd   _ t         -> NoFrHd $  elimFrees t
+    Z.Tl   _ t         -> NoFrTl $  elimFrees t
+    Z.Nil  _           -> NoFrNil
+    Z.Let  _ _ _ _ _ _ -> undefined
+    Z.Lam  _ x _ m     ->
         let noFrM   = elimFrees m
             newArgs = S.toList $ frees noFrM
         in

@@ -89,11 +89,16 @@ constraints env tm = case tm of
         tyArg  <- constraints env arg
         constrain tyFunc (TFunc tyArg (TVar n)) tm
         return $ TVar n
-    Let _ False x d b -> do
+    Let _ False x Nothing d b -> do
         b' <- lift $ subst d x b
         tyB' <- constraints env b'
         return tyB'
-    Let i True x d b -> constraints env (unLetR i x d b)
+    Let _ False x (Just tyX) d b -> do
+        tyD <- constraints env d
+        let newEnv = M.insert x tyX env
+        tyB <- constraints newEnv b
+        return tyB
+    Let i True x t d b -> constraints env (unLetR i x t d b)
     Fix _ -> do
         n <- lift fresh
         return $ ((TVar n) `TFunc` (TVar n)) `TFunc` (TVar n)
@@ -139,15 +144,15 @@ constraints env tm = case tm of
                 liftM (Lam i n t) (subst arg x b')
             else
                 liftM (Lam i y t) (subst arg x b)
-        Let i r y d b ->
+        Let i r y t d b ->
             if y == x then
                 return body
             else if y `S.member` freeVars arg then do
                 n <- fresh
                 b' <- subst (Var NoInfo n) y b
-                liftM2 (Let i r n) (subst arg x d) (subst arg x b')
+                liftM2 (Let i r n t) (subst arg x d) (subst arg x b')
             else
-                liftM2 (Let i r y) (subst arg x d) (subst arg x b)
+                liftM2 (Let i r y t) (subst arg x d) (subst arg x b)
         Var i y -> return $ if x == y then arg else body
         App i f a -> liftM2 (App i) (subst arg x f) (subst arg x a)
         Fix i -> return $ Fix i

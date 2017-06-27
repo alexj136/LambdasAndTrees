@@ -31,7 +31,8 @@ instance Arbitrary Term where
         [ ( 2 , liftM4 Lam  nfo genVarName arbitrary  arbitrary           )
         , ( 10, liftM2 Var  nfo genVarName                                )
         , ( 2 , liftM3 App  nfo arbitrary  arbitrary                      )
-        , ( 2 , liftM5 Let  nfo arbitrary  genVarName arbitrary arbitrary )
+        , ( 2 , liftM5 (Let NoInfo) arbitrary genVarName
+                                            arbitrary arbitrary arbitrary )
         , ( 5 , liftM  Fix  nfo                                           )
         , ( 1 , liftM4 Cond nfo arbitrary  arbitrary  arbitrary           )
         , ( 2 , liftM3 Cons nfo arbitrary  arbitrary                      )
@@ -127,7 +128,8 @@ genTypeSafeTerm depth env ty = frequency $ case ty of
     letE ty = do
         x  <- genVarName
         tX <- if depth <= 1 then return TTree else arbitraryType
-        liftM5 Let nfo arbitrary (return x) (recurse tX) (recurseWith x tX ty)
+        liftM5 (Let NoInfo) arbitrary (return x) (return (Just tX))
+            (recurse tX) (recurseWith x tX ty)
 
     -- Generate a lambda expression with the given argument and return type
     lambda :: Type -> Type -> Gen Term
