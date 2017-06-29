@@ -4,14 +4,13 @@ import Util
 import Types
 import SugarSyntax
 
+import Prelude hiding ((+))
 import Data.Maybe (fromMaybe, fromJust, isJust)
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Writer.Lazy
 import qualified Data.Map as M
 import qualified Data.Set as S
-
-import Debug.Trace
 
 --------------------------------------------------------------------------------
 -- TYPE SCHEME DATATYPE
@@ -30,11 +29,11 @@ instance Show Scheme where
 
 newtype Env = Env (M.Map Name Scheme)
 
-extend :: Env -> Name -> Scheme -> Env
-extend (Env env) n s = Env $ M.insert n s env
+(+) :: Env -> (Name, Scheme) -> Env
+(Env env) + (n, s) = Env $ M.insert n s env
 
-query :: Name -> Env -> Maybe Scheme
-query n (Env env) = M.lookup n env
+(!) :: Env -> Name -> Maybe Scheme
+(Env env) ! n = M.lookup n env
 
 emptyEnv :: Env
 emptyEnv = Env M.empty
@@ -96,40 +95,35 @@ instance Substitutable Constraint where
 newtype Constraint = Constraint (Type, Type, Term)
 
 instance Show Constraint where
-    show (Constraint (t1, t2, tm)) = show t1 ++ " /==/ " ++ show t2 ++ "       from       " ++ concat (lines (show tm))
+    show (Constraint (t1, t2, _)) = show (t1, t2)
 
 constraints :: Env -> Term -> WriterT [Constraint] (StateT Name Result) Type
 constraints env tm = case tm of
     Lam _ x mTy body -> do
-        n <- lift fresh
-        maybeConstrain mTy (TVar n) tm
-        let newEnv = extend env x (Base (TVar n))
-        tyBody <- constraints newEnv body
-        let inferredTy = TFunc (TVar n) tyBody
-        return inferredTy
-    Var i x -> case query x env of
-        Just sc -> do
-            ty <- lift $ instantiate sc
-            return ty
+        n <- freshTVar
+        maybeConstrain mTy n tm
+        tyBody <- constraints (env + (x, Base n)) body
+        return $ TFunc n tyBody
+    Var i x -> case env ! x of
+        Just sc -> lift $ instantiate sc
         Nothing -> throwError $
             \m -> "Unbound name '" ++ m !? x ++ "': " ++ show i
     App _ func arg -> do
         tyFunc <- constraints env func
         tyArg  <- constraints env arg
-        n      <- lift fresh
-        constrain tyFunc (TFunc tyArg (TVar n)) tm
-        return $ TVar n
+        n      <- freshTVar
+        constrain tyFunc (TFunc tyArg n) tm
+        return n
     Let _ False x mTy d b -> do
         tyD <- constraints env d
         maybeConstrain mTy tyD tm
-        let scD    = generalize env tyD
-        let newEnv = extend env x scD
-        tyB <- constraints newEnv b
+        let scD = generalize env tyD
+        tyB <- constraints (env + (x, scD)) b
         return tyB
     Let i True x t d b -> constraints env (unLetR i x t d b)
     Fix _ -> do
-        n <- lift fresh
-        return $ ((TVar n) `TFunc` (TVar n)) `TFunc` (TVar n)
+        n <- freshTVar
+        return $ (n `TFunc` n) `TFunc` n
     Cond _ gd tbr fbr -> do
         tyGd  <- constraints env gd
         tyTbr <- constraints env tbr
@@ -155,8 +149,13 @@ constraints env tm = case tm of
 
     where
 
+    freshTVar :: WriterT [Constraint] (StateT Name Result) Type
+    freshTVar = do
+        n <- lift fresh
+        return $ TVar n
+
     constrain :: Monad m => Type -> Type -> Term -> WriterT [Constraint] m ()
-    constrain t1 t2 tm = tell [traceShowId $ Constraint (t1, t2, tm)]
+    constrain t1 t2 tm = tell [Constraint (t1, t2, tm)]
 
     maybeConstrain :: Monad m => Maybe Type -> Type -> Term ->
         WriterT [Constraint] m ()
@@ -194,8 +193,8 @@ unifyMany (constr:rest) = do
 unify :: Constraint -> Result Subst
 unify (Constraint (ty1, ty2, originTm)) = case (ty1, ty2) of
     (a        , α        ) | a == α -> return idSubst
-    (TVar x   , t        ) -> handleVar x t originTm
-    (t        , TVar x   ) -> handleVar x t originTm
+    (TVar x   , t        ) -> handleVar x t
+    (t        , TVar x   ) -> handleVar x t
     (TFunc a b, TFunc α β) ->
         unifyMany [Constraint (a, α, originTm), Constraint (b, β, originTm)]
     (a        , α        ) -> throwError $ \m ->
@@ -209,11 +208,13 @@ unify (Constraint (ty1, ty2, originTm)) = case (ty1, ty2) of
 
     where
 
-    handleVar :: Name -> Type -> Term -> Result Subst
-    handleVar n ty tm
+    handleVar :: Name -> Type -> Result Subst
+    handleVar n ty
         | ty == TVar n = return idSubst
         | occurs n ty  = throwError $ \m ->
-            "Illegal infinite type at " ++ showMPos (getPos tm)
+            "Illegal infinite type\n"
+            ++ "    " ++ m !? n ++ " = " ++ prettyPrint m ty
+            ++ "at " ++ showMPos (getPos originTm)
             ++ "\nin expression:\n" ++ prettyPrint m originTm
         | otherwise    = return $ M.singleton n ty
 
