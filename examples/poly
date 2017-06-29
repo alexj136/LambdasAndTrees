@@ -1,12 +1,12 @@
-let id = | x .
+let id: a -> a = | x .
     x
 in
 
-let f =
+let f: a -> a =
     id id
 in
 
-let t =
+let t: @ =
     id nil
 in
-    t
+    f t

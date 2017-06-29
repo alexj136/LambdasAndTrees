@@ -65,9 +65,10 @@ TS : TERM TS { $1 : $2 } | TERM { [$1] }
 
 TY :: { Type }
 TY
-    : TY Arrow TY      { TFunc $1 $3 }
-    | At               { TTree       }
-    | LParen TY RParen { $2          }
+    : TY Arrow TY      { TFunc $1 $3                                 }
+    | At               { TTree                                       }
+    | LParen TY RParen { $2                                          }
+    | Name             { case $1 of (Token (_, TK_Name n)) -> TVar n }
 
 -- An optional colon and type
 MTY :: { Maybe Type }

@@ -70,45 +70,46 @@ tab :: Integer -> String
 tab 0 = ""
 tab n = "  " ++ tab (n - 1)
 
-prettyPrint :: M.Map Name String -> Term -> String
-prettyPrint = pp 0 where
-    pp :: Integer -> M.Map Name String -> Term -> String
-    pp indent names term = case term of
-        Lam  _ x Nothing  m ->
-            "(| " ++ names !? x ++ " . \n"
-            ++ tab (indent + 1) ++ (pp (indent + 1) names m) ++ "\n"
-            ++ tab  indent ++ ")"
-        Lam  _ x (Just t) m ->
-            "(| " ++ names !? x ++ ": " ++ show t ++ " . \n"
-            ++ tab (indent + 1) ++ (pp (indent + 1) names m) ++ "\n"
-            ++ tab  indent ++ ")"
-        Var  _ x            -> names !? x
-        App  _ m n          ->
-            "(" ++ (pp (indent + 1) names m) ++ " "
-                ++ (pp (indent + 1) names n) ++ ")"
-        Let  _ r x Nothing d b  ->
-            "(let " ++ (if r then "rec " else "") ++ names !? x ++ " = "
-                ++ (pp (indent + 1) names d) ++ " in \n"
-            ++ tab (indent + 1) ++ (pp (indent + 1) names b)
-            ++ tab  indent      ++ ")"
-        Let  _ r x (Just t) d b ->
-            "(let " ++ (if r then "rec " else "") ++ names !? x ++ ": "
-                ++ show t ++ " = " ++ (pp (indent + 1) names d) ++ " in \n"
-            ++ tab (indent + 1) ++ (pp (indent + 1) names b)
-            ++ tab  indent      ++ ")"
-        Fix  _              -> "fix"
-        Cond _ g t f        ->
-            "if " ++ (pp indent names g) ++ " then\n"
-            ++ tab (indent + 1) ++ (pp (indent + 1) names t) ++ "\n"
-            ++ tab  indent      ++ "else \n"
-            ++ tab (indent + 1) ++ (pp (indent + 1) names f) ++ "\n"
-            ++ tab  indent      ++ "end"
-        Cons _ l r          ->
-            "(" ++ (pp (indent + 1) names l) ++ "."
-                ++ (pp (indent + 1) names r) ++ ")"
-        Hd   _ t            -> "(< " ++ (pp (indent + 1) names t) ++ ")"
-        Tl   _ t            -> "(> " ++ (pp (indent + 1) names t) ++ ")"
-        Nil  _              -> "nil"
+instance PrettyPrint Term where
+    prettyPrint = pp 0 where
+        pp :: Integer -> M.Map Name String -> Term -> String
+        pp indent names term = case term of
+            Lam  _ x Nothing  m ->
+                "(| " ++ names !? x ++ " . \n"
+                ++ tab (indent + 1) ++ (pp (indent + 1) names m) ++ "\n"
+                ++ tab  indent ++ ")"
+            Lam  _ x (Just t) m ->
+                "(| " ++ names !? x ++ ": " ++ prettyPrint names t ++ " . \n"
+                ++ tab (indent + 1) ++ (pp (indent + 1) names m) ++ "\n"
+                ++ tab  indent ++ ")"
+            Var  _ x            -> names !? x
+            App  _ m n          ->
+                "(" ++ (pp (indent + 1) names m) ++ " "
+                    ++ (pp (indent + 1) names n) ++ ")"
+            Let  _ r x Nothing d b  ->
+                "(let " ++ (if r then "rec " else "") ++ names !? x ++ " = "
+                    ++ (pp (indent + 1) names d) ++ " in \n"
+                ++ tab (indent + 1) ++ (pp (indent + 1) names b)
+                ++ tab  indent      ++ ")"
+            Let  _ r x (Just t) d b ->
+                "(let " ++ (if r then "rec " else "") ++ names !? x ++ ": "
+                    ++ prettyPrint names t ++ " = "
+                    ++ (pp (indent + 1) names d) ++ " in \n"
+                ++ tab (indent + 1) ++ (pp (indent + 1) names b)
+                ++ tab  indent      ++ ")"
+            Fix  _              -> "fix"
+            Cond _ g t f        ->
+                "if " ++ (pp indent names g) ++ " then\n"
+                ++ tab (indent + 1) ++ (pp (indent + 1) names t) ++ "\n"
+                ++ tab  indent      ++ "else \n"
+                ++ tab (indent + 1) ++ (pp (indent + 1) names f) ++ "\n"
+                ++ tab  indent      ++ "end"
+            Cons _ l r          ->
+                "(" ++ (pp (indent + 1) names l) ++ "."
+                    ++ (pp (indent + 1) names r) ++ ")"
+            Hd   _ t            -> "(< " ++ (pp (indent + 1) names t) ++ ")"
+            Tl   _ t            -> "(> " ++ (pp (indent + 1) names t) ++ ")"
+            Nil  _              -> "nil"
 
 debugPrint :: Term -> String
 debugPrint = pp 0 where

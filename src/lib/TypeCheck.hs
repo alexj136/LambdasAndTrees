@@ -4,98 +4,126 @@ import Util
 import Types
 import SugarSyntax
 
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust, isJust)
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Writer.Lazy
 import qualified Data.Map as M
 import qualified Data.Set as S
 
-type Env = M.Map Name Type
+import Debug.Trace
 
-type Constraints = S.Set Constraint
+--------------------------------------------------------------------------------
+-- TYPE SCHEME DATATYPE
+--------------------------------------------------------------------------------
 
--- A constraint also carries a Term, which is the source origin of the
--- constraint, used for error messages
-newtype Constraint = Constraint (Type, Type, Term) deriving (Show, Ord)
+data Scheme = Quant Name Scheme | Base Type deriving (Eq, Ord)
 
-instance Eq Constraint where
-    Constraint (a, b, _) == Constraint (c, d, _) = (a, b) == (c, d)
+instance Show Scheme where
+    show s = case s of
+        Quant n s -> "∀" ++ show n ++ "." ++ show s
+        Base ty   -> show ty
 
-check :: Term -> StateT Name Result Type
-check tm = do
-    (ty, constrs) <- runWriterT $ constraints M.empty tm
-    unifier       <- lift $ unify constrs
-    return $ unifier ty
+--------------------------------------------------------------------------------
+-- ENVIRONMENT DATATYPE
+--------------------------------------------------------------------------------
 
-unify :: Constraints -> Result (Type -> Type)
-unify constrs = if null constrs then return id else
-    let (next, rest) = S.deleteFindMin constrs in case next of
+newtype Env = Env (M.Map Name Scheme)
 
-        Constraint (ty1, ty2, _) | ty1 == ty2 -> unify rest
+extend :: Env -> Name -> Scheme -> Env
+extend (Env env) n s = Env $ M.insert n s env
 
-        Constraint (TVar x, ty, _) | not $ occurs x ty -> handleVar x ty rest
+query :: Name -> Env -> Maybe Scheme
+query n (Env env) = M.lookup n env
 
-        Constraint (ty, TVar x, _) | not $ occurs x ty -> handleVar x ty rest
+emptyEnv :: Env
+emptyEnv = Env M.empty
 
-        Constraint (TFunc a1 b1, TFunc a2 b2, tm) -> unify $
-            S.insert (Constraint (a1, a2, tm)) $
-            S.insert (Constraint (b1, b2, tm)) $ rest
+--------------------------------------------------------------------------------
+-- SUBSTITUTION DATATYPE (represented with a Data.Map)
+--------------------------------------------------------------------------------
 
-        Constraint (ty1, ty2, tm) -> throwError $ \m ->
-            "Unsatisfiable type constraint at " ++ showMPos (getPos tm)
-            ++ "\nin expression:\n" ++ prettyPrint m tm
+type Subst = M.Map Name Type
 
-    where
+idSubst :: Subst
+idSubst = M.empty
 
-    handleVar :: Name -> Type -> Constraints -> Result (Type -> Type)
-    handleVar x ty rest = do
-        unifyRest <- unify (S.map (constrSub x ty) rest)
-        return $ unifyRest . (tySub x ty)
+compose :: Subst -> Subst -> Subst
+compose s1 s2 = M.map (apply s1) s2 `M.union` s1
 
-    constrSub :: Name -> Type -> Constraint -> Constraint
-    constrSub x ty (Constraint (t1, t2, tm)) =
-        Constraint (tySub x ty t1, tySub x ty t2, tm)
+class Substitutable a where
+    apply :: Subst -> a -> a
+    freeTVars :: a -> S.Set Name
 
-    tySub :: Name -> Type -> Type -> Type
-    tySub from to within = case within of
-        TVar  x   -> if x == from then to else TVar x
-        TFunc a b -> TFunc (tySub from to a) (tySub from to b)
+occurs :: Substitutable a => Name -> a -> Bool
+occurs n = (S.member n) . freeTVars
+
+instance Substitutable Type where
+    apply subst ty = case ty of
         TTree     -> TTree
+        TVar n    -> M.findWithDefault (TVar n) n subst
+        TFunc t u -> TFunc (apply subst t) (apply subst u)
+    freeTVars ty = case ty of
+        TTree       -> S.empty
+        TFunc t1 t2 -> freeTVars t1 `S.union` freeTVars t2
+        TVar  n     -> S.singleton n
 
-    occurs :: Name -> Type -> Bool
-    occurs x (TVar  y  ) = x == y
-    occurs x (TFunc a b) = occurs x a || occurs x b
-    occurs x  TTree      = False
+instance Substitutable Scheme where
+    apply subst sc = case sc of
+        Quant n s -> Quant n (apply (M.delete n subst) s)
+        Base ty   -> Base (apply subst ty)
+    freeTVars sc = case sc of
+        Quant n s -> S.delete n (freeTVars s)
+        Base ty   -> freeTVars ty
 
-constraints :: Env -> Term -> WriterT Constraints (StateT Name Result) Type
+instance Substitutable Env where
+    apply subst (Env env) = Env $ M.map (apply subst) env
+    freeTVars (Env env) = S.unions $ map freeTVars $ M.elems env
+
+instance Substitutable a => Substitutable [a] where
+    apply = map . apply
+    freeTVars = S.unions . map freeTVars
+
+instance Substitutable Constraint where
+    apply subst (Constraint (ty1, ty2, originTm)) =
+        Constraint (apply subst ty1, apply subst ty2, originTm)
+    freeTVars (Constraint (ty1, ty2, _)) = freeTVars ty1 `S.union` freeTVars ty2
+
+--------------------------------------------------------------------------------
+-- CONSTRAINT GENERATION
+--------------------------------------------------------------------------------
+
+newtype Constraint = Constraint (Type, Type, Term)
+
+instance Show Constraint where
+    show (Constraint (t1, t2, tm)) = show t1 ++ " /==/ " ++ show t2 ++ "       from       " ++ concat (lines (show tm))
+
+constraints :: Env -> Term -> WriterT [Constraint] (StateT Name Result) Type
 constraints env tm = case tm of
-    Lam _ x Nothing body -> do
+    Lam _ x mTy body -> do
         n <- lift fresh
-        let newEnv = M.insert x (TVar n) env
+        maybeConstrain mTy (TVar n) tm
+        let newEnv = extend env x (Base (TVar n))
         tyBody <- constraints newEnv body
-        return $ TFunc (TVar n) tyBody
-    Lam _ x (Just tyX) body -> do
-        let newEnv = M.insert x tyX env
-        tyBody <- constraints newEnv body
-        return $ TFunc tyX tyBody
-    Var i x -> case M.lookup x env of
-        Just ty -> return ty
+        let inferredTy = TFunc (TVar n) tyBody
+        return inferredTy
+    Var i x -> case query x env of
+        Just sc -> do
+            ty <- lift $ instantiate sc
+            return ty
         Nothing -> throwError $
             \m -> "Unbound name '" ++ m !? x ++ "': " ++ show i
     App _ func arg -> do
-        n <- lift fresh
         tyFunc <- constraints env func
         tyArg  <- constraints env arg
+        n      <- lift fresh
         constrain tyFunc (TFunc tyArg (TVar n)) tm
         return $ TVar n
-    Let _ False x Nothing d b -> do
-        b' <- lift $ subst d x b
-        tyB' <- constraints env b'
-        return tyB'
-    Let _ False x (Just tyX) d b -> do
+    Let _ False x mTy d b -> do
         tyD <- constraints env d
-        let newEnv = M.insert x tyX env
+        maybeConstrain mTy tyD tm
+        let scD    = generalize env tyD
+        let newEnv = extend env x scD
         tyB <- constraints newEnv b
         return tyB
     Let i True x t d b -> constraints env (unLetR i x t d b)
@@ -127,38 +155,74 @@ constraints env tm = case tm of
 
     where
 
-    fresh :: Monad m => StateT Name m Name
-    fresh = state $ \n -> (n, after n)
+    constrain :: Monad m => Type -> Type -> Term -> WriterT [Constraint] m ()
+    constrain t1 t2 tm = tell [traceShowId $ Constraint (t1, t2, tm)]
 
-    constrain :: Monad m => Type -> Type -> Term -> WriterT Constraints m ()
-    constrain t1 t2 tm = tell $ S.singleton (Constraint (t1, t2, tm))
+    maybeConstrain :: Monad m => Maybe Type -> Type -> Term ->
+        WriterT [Constraint] m ()
+    maybeConstrain mTy1 ty2 tm = case mTy1 of
+        Nothing  -> return ()
+        Just ty1 -> constrain ty1 ty2 tm
 
-    subst :: Monad m => Term -> Name -> Term -> StateT Name m Term
-    subst arg x body = case body of
-        Lam i y t b ->
-            if y == x then
-                return body
-            else if y `S.member` freeVars arg then do
-                n <- fresh
-                b' <- subst (Var NoInfo n) y b
-                liftM (Lam i n t) (subst arg x b')
-            else
-                liftM (Lam i y t) (subst arg x b)
-        Let i r y t d b ->
-            if y == x then
-                return body
-            else if y `S.member` freeVars arg then do
-                n <- fresh
-                b' <- subst (Var NoInfo n) y b
-                liftM2 (Let i r n t) (subst arg x d) (subst arg x b')
-            else
-                liftM2 (Let i r y t) (subst arg x d) (subst arg x b)
-        Var i y -> return $ if x == y then arg else body
-        App i f a -> liftM2 (App i) (subst arg x f) (subst arg x a)
-        Fix i -> return $ Fix i
-        Cond i gd tbr fbr ->
-            liftM3 (Cond i) (subst arg x gd) (subst arg x tbr) (subst arg x fbr)
-        Cons i l r -> liftM2 (Cons i) (subst arg x l) (subst arg x r)
-        Hd i e -> liftM (Hd i) (subst arg x e)
-        Tl i e -> liftM (Tl i) (subst arg x e)
-        Nil i -> return $ Nil i
+-- Generalize a type by quantifying over all free type variables it contains. Do
+-- not generalize any type variables that exist in the current scope as they
+-- have a 'broader meaning'.
+generalize :: Env -> Type -> Scheme
+generalize env ty = foldr Quant (Base ty)
+    (S.toList (freeTVars ty `S.difference` freeTVars env))
+
+-- Replace implicitly quantified type variables in a given type with fresh names
+instantiate :: Monad m => Scheme -> StateT Name m Type
+instantiate sc = case sc of
+    Base ty   -> return ty
+    Quant x s -> do
+        y <- fresh
+        t <- instantiate s
+        return $ apply (M.singleton x (TVar y)) t
+
+--------------------------------------------------------------------------------
+-- UNIFICATION
+--------------------------------------------------------------------------------
+
+unifyMany :: [Constraint] -> Result Subst
+unifyMany [] = return idSubst
+unifyMany (constr:rest) = do
+    s1 <- unify constr
+    s2 <- unifyMany (apply s1 rest)
+    return $ compose s2 s1
+
+unify :: Constraint -> Result Subst
+unify (Constraint (ty1, ty2, originTm)) = case (ty1, ty2) of
+    (a        , α        ) | a == α -> return idSubst
+    (TVar x   , t        ) -> handleVar x t originTm
+    (t        , TVar x   ) -> handleVar x t originTm
+    (TFunc a b, TFunc α β) ->
+        unifyMany [Constraint (a, α, originTm), Constraint (b, β, originTm)]
+    (a        , α        ) -> throwError $ \m ->
+        "Could not match type\n"
+        ++ "    " ++ prettyPrint m a ++ "\n"
+        ++ "with\n"
+        ++ "    " ++ prettyPrint m α ++ "\n"
+        ++ "at " ++ showMPos (getPos originTm) ++ "\n"
+        ++ "in expression:\n"
+        ++ prettyPrint m originTm
+
+    where
+
+    handleVar :: Name -> Type -> Term -> Result Subst
+    handleVar n ty tm
+        | ty == TVar n = return idSubst
+        | occurs n ty  = throwError $ \m ->
+            "Illegal infinite type at " ++ showMPos (getPos tm)
+            ++ "\nin expression:\n" ++ prettyPrint m originTm
+        | otherwise    = return $ M.singleton n ty
+
+--------------------------------------------------------------------------------
+-- EXTERNAL INTERFACE
+--------------------------------------------------------------------------------
+
+check :: Term -> StateT Name Result Type
+check tm = do
+    (ty, constrs) <- runWriterT $ constraints emptyEnv tm
+    unifier       <- lift $ unifyMany constrs
+    return $ apply unifier ty
