@@ -1,20 +1,10 @@
 module RecTypes where
 
+import Util
 import Control.Monad.State
 import qualified Data.Set as S
 import qualified Data.Map as M
 import Data.Maybe (isJust)
-
--- Some testing stuff (need to integrate into proper module)
-tests :: [(Type, Type, Bool)]
-tests =
-    [ (TVar (Name 0), TVar (Name 0), True )
-    , (TVar (Name 1), TVar (Name 0), False)
-    , (listT, unsafeFold listT, True)
-    , (unsafeFold listT, listT, True)
-    ]
-listT :: Type
-listT = Mu (Name 0) (Sum (Pair Unit (TVar (Name 0))) Unit)
 
 ----------------------------------
 -- Datatype for recursive types --
@@ -66,11 +56,8 @@ contractive = ck S.empty
         TVar n   -> S.notMember n s
         Unit     -> True
 
-fresh :: State Name Name
-fresh = do
-    Name n <- get
-    put $ Name $ n + 1
-    return $ Name n
+notEquiv :: Type -> Type -> State Name Bool
+notEquiv t = liftM not . (equiv t)
 
 ----------------------------------
 -- Substitution and equivalence --

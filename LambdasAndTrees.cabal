@@ -34,6 +34,7 @@ library
                         DeBruijnSyntax,
                         Types,
                         TypeCheck,
+                        RecTypes,
                         Interpreter,
                         CodeGen
 Test-Suite LambdasAndTrees-testsuite
@@ -44,12 +45,15 @@ Test-Suite LambdasAndTrees-testsuite
                         array,
                         mtl,
                         LambdasAndTrees,
+                        HUnit,
                         QuickCheck,
                         test-framework,
+                        test-framework-hunit,
                         test-framework-quickcheck2
   other-modules:        GenData,
                         TestParser,
                         TestTypeCheck,
+                        TestRecTypes,
                         TestUtil
   type:                 exitcode-stdio-1.0
   main-is:              TestMain.hs
