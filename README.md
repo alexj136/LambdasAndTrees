@@ -1,6 +1,9 @@
-# Lambdas and Trees
+# ROBIN
 
-Lambdas and Trees is programming language with lambdas and binary trees.
+![Robin Logo](logo/robin.png?raw=true "Robin Logo")
+
+Robin is a pre-alpha functional programming language whose aim is to include
+linearity, implicits and HKTs.
 
 ## Syntax
 
