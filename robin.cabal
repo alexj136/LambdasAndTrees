@@ -34,7 +34,6 @@ library
                         DeBruijnSyntax,
                         Types,
                         TypeCheck,
-                        RecTypes,
                         Interpreter,
                         CodeGen
 Test-Suite robin-testsuite
@@ -44,16 +43,9 @@ Test-Suite robin-testsuite
                         containers >=0.5 && <0.6,
                         array,
                         mtl,
-                        robin,
-                        HUnit,
-                        QuickCheck,
-                        test-framework,
-                        test-framework-hunit,
-                        test-framework-quickcheck2
-  other-modules:        GenData,
+                        robin
+  other-modules:        TestUtil,
                         TestParser,
-                        TestTypeCheck,
-                        TestRecTypes,
-                        TestUtil
+                        TestTypeCheck
   type:                 exitcode-stdio-1.0
   main-is:              TestMain.hs

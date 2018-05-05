@@ -1,24 +1,15 @@
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
-
 module TestUtil where
 
-import qualified Util as U
-import SugarSyntax
-import Types
+data Test = Test String Bool deriving (Show, Eq, Ord)
 
-import Data.Map (empty)
-import Test.QuickCheck (Testable, property)
-import Test.QuickCheck.Property (failed, reason)
-import Control.Monad.Except (runExcept)
+runTests :: [Test] -> IO Bool
+runTests tests = do
+    allResults <- sequence $ map runTest tests
+    return $ and allResults
 
-instance Testable t => Testable (U.Result t) where
-    property p = case runExcept p of
-        Right e -> property e
-        Left  s -> property $ failed { reason = s empty }
-
-instance Testable Type where
-    property _ = property True
-
-instance Testable Term where
-    property _ = property True
+runTest :: Test -> IO Bool
+runTest test = case test of
+    Test _      True  -> return True
+    Test testDesc False -> do
+        putStrLn $ "Test failed: " ++ testDesc
+        return False

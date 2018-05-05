@@ -1,16 +1,20 @@
 module Main where
 
-import GenData
-import Types
+import TestUtil
+import qualified TestParser as P
 import qualified TestTypeCheck as TC
-import qualified TestParser    as P
-import qualified TestRecTypes  as RT
 
-import Test.QuickCheck
-import Test.Framework (defaultMain, Test)
+import System.Exit
 
-main :: IO ()
-main = defaultMain tests
+main :: IO ExitCode
+main = do
+    putStr "\n"
+    result <- runTests tests
+    if result then do
+        putStrLn "All tests passed."
+        exitSuccess
+    else
+        exitFailure
 
 tests :: [Test]
-tests = [TC.tests, P.tests, RT.tests]
+tests = TC.tests ++ P.tests
