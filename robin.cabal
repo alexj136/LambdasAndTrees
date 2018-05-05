@@ -18,10 +18,12 @@ executable robin
                         robin
   hs-source-dirs:       src/exec
   default-language:     Haskell2010
+  ghc-options:          -fwarn-incomplete-patterns
 library
   build-tools:          alex >=3.1.7,
                         happy >=1.19
   default-language:     Haskell2010
+  ghc-options:          -fwarn-incomplete-patterns
   hs-source-dirs:       src/lib
   build-depends:        base >=4.9 && <4.10,
                         containers >=0.5 && <0.6,
@@ -38,6 +40,7 @@ library
                         CodeGen
 Test-Suite robin-testsuite
   default-language:     Haskell2010
+  ghc-options:          -fwarn-incomplete-patterns
   hs-source-dirs:       src/test
   build-depends:        base >=4.9 && <4.10,
                         containers >=0.5 && <0.6,

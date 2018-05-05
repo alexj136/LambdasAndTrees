@@ -146,6 +146,10 @@ constraints env tm = case tm of
         constrain tyE TTree e
         return TTree
     Nil _ -> return TTree
+    Tag _ t b -> do
+        tyB <- constraints env b
+        constrain tyB t tm
+        return tyB
 
     where
 

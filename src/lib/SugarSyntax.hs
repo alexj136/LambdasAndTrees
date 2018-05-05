@@ -20,6 +20,7 @@ data Term
     | Hd   Info Term
     | Tl   Info Term
     | Nil  Info
+    | Tag  Info Type Term
     deriving (Eq, Ord)
 
 instance Show Term where
@@ -37,6 +38,7 @@ instance Positionable Term where
         Hd   (PosInfo pos) _         -> Just pos
         Tl   (PosInfo pos) _         -> Just pos
         Nil  (PosInfo pos)           -> Just pos
+        Tag  (PosInfo pos) _ _       -> Just pos
         _ -> Nothing
 
 data Info = PosInfo Pos | NoInfo deriving Ord
@@ -64,6 +66,7 @@ freeVars tm = case tm of
     Hd   _ e         -> freeVars e
     Tl   _ e         -> freeVars e
     Nil  _           -> S.empty
+    Tag  _ t b       -> freeVars b
 
 -- Convert the indentation-level to a string
 tab :: Integer -> String
@@ -110,6 +113,9 @@ instance PrettyPrint Term where
             Hd   _ t            -> "(< " ++ (pp (indent + 1) names t) ++ ")"
             Tl   _ t            -> "(> " ++ (pp (indent + 1) names t) ++ ")"
             Nil  _              -> "nil"
+            Tag  _ t b          ->
+                "(" ++ (pp indent names b) ++ " : "
+                    ++ (prettyPrint names t) ++ ")"
 
 debugPrint :: Term -> String
 debugPrint = pp 0 where
@@ -164,6 +170,11 @@ debugPrint = pp 0 where
             ++ pp (indent + 2) t
         Nil  i           ->
             "\n" ++ tab indent ++ "| NIL " ++ show i
+        Tag  i t b       ->
+            "\n" ++ tab indent ++ "| TYPE TAG " ++ show i
+            ++ "\n" ++ tab (indent + 1) ++ "| TYPE = " ++ show t
+            ++ "\n" ++ tab (indent + 1) ++ "| BODY = "
+            ++ pp (indent + 2) b
 
 -- Desugar a Term, i.e. convert it to De Bruijn syntax. Wrapper around a worker
 -- that passes a map with name bindings.
@@ -187,6 +198,7 @@ desugar = let
         Hd   _ t             -> liftM  P.Hd   (desug ns t)
         Tl   _ t             -> liftM  P.Tl   (desug ns t)
         Nil  _               -> return P.Nil
+        Tag  _ _ b           -> desug ns b
     in desug M.empty
 
 -- Convert a let rec into a let with fix

@@ -58,6 +58,7 @@ TERM
     | Hd TS                                { hd     $1 $2                   }
     | Tl TS                                { tl     $1 $2                   }
     | Nil                                  { nil    $1                      }
+    | LParen TS Colon TY RParen            { tag    $1 $2 $3 $4 $5          }
     | LParen TS RParen                     { parens $1 $2 $3                }
 
 TS :: { [Term] }
@@ -125,6 +126,10 @@ tl tlTk body = Tl (maybe NoInfo PosInfo (tlTk `span` body)) (tsToT body)
 
 nil :: Token -> Term
 nil (Token (pos, TK_Nil)) = Nil $ maybe NoInfo PosInfo pos
+
+tag :: Token -> [Term] -> Token -> Type -> Token -> Term
+tag lpTk body colonTk ty rpTk =
+    Tag (maybe NoInfo PosInfo (lpTk `span` rpTk)) ty (tsToT body)
 
 parens :: Token -> [Term] -> Token -> Term
 parens lpTk body rpTk = tsToT body
