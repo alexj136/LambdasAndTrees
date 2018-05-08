@@ -20,6 +20,18 @@ eval tm = case tm of
         evalBody <- eval body
         eval $ App Fix evalBody
 
+    App Hd e -> do
+        evE <- eval e
+        case evE of
+            Cons h _ -> return h
+            Nil      -> throwBasic "< nil"
+
+    App Tl e -> do
+        evE <- eval e
+        case evE of
+            Cons _ t -> return t
+            Nil      -> throwBasic "> nil"
+
     App m n -> do
         eM <- eval m
         eN <- eval n
@@ -34,18 +46,6 @@ eval tm = case tm of
         evT <- eval t
         return $ Cons evH evT
 
-    Hd e -> do
-        evE <- eval e
-        case evE of
-            Cons h _ -> return h
-            Nil      -> throwBasic "< nil"
-
-    Tl e -> do
-        evE <- eval e
-        case evE of
-            Cons _ t -> return t
-            Nil      -> throwBasic "> nil"
-
     Nil -> return Nil
 
 sub :: Integer -> Term -> Term -> Term
@@ -56,8 +56,8 @@ sub x arg body = let subAgain = sub x arg in case body of
     Fix             -> Fix
     Cond gd tbr fbr -> Cond (subAgain gd  ) (subAgain tbr) (subAgain fbr)
     Cons l r        -> Cons (subAgain l   ) (subAgain r  )
-    Hd e            -> Hd   (subAgain e   )
-    Tl e            -> Tl   (subAgain e   )
+    Hd              -> Hd
+    Tl              -> Tl
     Nil             -> Nil
 
 shift :: Integer -> Integer -> Term -> Term
@@ -68,6 +68,6 @@ shift places cutoff tm = let shiftAgain = shift places cutoff in case tm of
     Fix             -> Fix
     Cond gd tbr fbr -> Cond (shiftAgain gd  ) (shiftAgain tbr) (shiftAgain fbr)
     Cons l r        -> Cons (shiftAgain l   ) (shiftAgain r  )
-    Hd e            -> Hd   (shiftAgain e   )
-    Tl e            -> Tl   (shiftAgain e   )
+    Hd              -> Hd
+    Tl              -> Tl
     Nil             -> Nil

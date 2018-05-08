@@ -137,14 +137,8 @@ constraints env tm = case tm of
         constrain tyL TTree l
         constrain tyR TTree r
         return TTree
-    Hd _ e -> do
-        tyE <- constraints env e
-        constrain tyE TTree e
-        return TTree
-    Tl _ e -> do
-        tyE <- constraints env e
-        constrain tyE TTree e
-        return TTree
+    Hd _ -> return $ TFunc TTree TTree
+    Tl _ -> return $ TFunc TTree TTree
     Nil _ -> return TTree
     Tag _ t b -> do
         tyB <- constraints env b

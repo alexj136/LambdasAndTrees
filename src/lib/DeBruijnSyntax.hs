@@ -7,8 +7,8 @@ data Term
     | Fix
     | Cond Term Term Term
     | Cons Term Term
-    | Hd Term
-    | Tl Term
+    | Hd
+    | Tl
     | Nil
     deriving (Eq, Ord)
 
@@ -20,6 +20,6 @@ instance Show Term where
     show (Cond g t f) = "if " ++ show g ++ " then " ++ show t ++ " else "
         ++ show f ++ " end"
     show (Cons l r  ) = "(" ++ show l ++ "." ++ show r ++ ")"
-    show (Hd t      ) = "< " ++ show t
-    show (Tl t      ) = "> " ++ show t
+    show  Hd          = "<"
+    show  Tl          = ">"
     show  Nil         = "nil"

@@ -28,8 +28,8 @@ data NoFrTm
     | NoFrLet   [Name]  NoFrTm NoFrTm
     | NoFrCond  NoFrTm  NoFrTm NoFrTm
     | NoFrCons  NoFrTm  NoFrTm
-    | NoFrHd    NoFrTm
-    | NoFrTl    NoFrTm
+    | NoFrHd
+    | NoFrTl
     | NoFrNil
     deriving (Show, Eq, Ord)
 
@@ -42,8 +42,8 @@ frees tm = case tm of
     NoFrLet  xs d b -> undefined
     NoFrCond g t f  -> frees g `S.union` frees t `S.union` frees f
     NoFrCons l r    -> frees l `S.union` frees r
-    NoFrHd   t      -> frees t
-    NoFrTl   t      -> frees t
+    NoFrHd          -> S.empty
+    NoFrTl          -> S.empty
     NoFrNil         -> S.empty
 
 elimFrees :: Z.Term -> NoFrTm
@@ -52,10 +52,12 @@ elimFrees tm = case tm of
     Z.App  _ m n       -> NoFrApp  (elimFrees m) [elimFrees n]
     Z.Cond _ g t f     -> NoFrCond (elimFrees g) (elimFrees t) (elimFrees f)
     Z.Cons _ l r       -> NoFrCons (elimFrees l) (elimFrees r)
-    Z.Hd   _ t         -> NoFrHd $  elimFrees t
-    Z.Tl   _ t         -> NoFrTl $  elimFrees t
+    Z.Fix  _           -> undefined
+    Z.Hd   _           -> NoFrHd
+    Z.Tl   _           -> NoFrTl
     Z.Nil  _           -> NoFrNil
     Z.Let  _ _ _ _ _ _ -> undefined
+    Z.Tag  _ _ m       -> elimFrees m
     Z.Lam  _ x _ m     ->
         let noFrM   = elimFrees m
             newArgs = S.toList $ frees noFrM
@@ -90,7 +92,8 @@ liftLams fresh fs tm = case tm of
     NoFrVar  x     -> undefined
     NoFrApp  f as  -> undefined
     NoFrCond g t f -> undefined
-    NoFrCons l r   -> undefined--LCons nL nR where
-    NoFrHd   t     -> undefined--LHd $ liftLams fresh t
-    NoFrTl   t     -> undefined--LTl $ liftLams fresh t
+    NoFrCons l r   -> undefined
+    NoFrHd         -> undefined
+    NoFrTl         -> undefined
     NoFrNil        -> (fresh, LProg (fs, LNil))
+    _ -> error "Not yet implemented"

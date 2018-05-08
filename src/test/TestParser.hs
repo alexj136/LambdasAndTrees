@@ -6,6 +6,7 @@ import Util
 import Lexer
 import Parser
 import SugarSyntax
+import Types
 
 import qualified Data.Map as M
 
@@ -32,5 +33,13 @@ tests =
             (Var NoInfo (Name 1))))
     , testParse "Simple expression 5" "(| x . x) y"
         (App NoInfo (Lam NoInfo (Name 0) Nothing (Var NoInfo (Name 0)))
+            (Var NoInfo (Name 1)))
+    , testParse "Simple expression 6" "nil nil nil nil"
+        (App NoInfo (App NoInfo (App NoInfo (Nil NoInfo) (Nil NoInfo))
+            (Nil NoInfo)) (Nil NoInfo))
+    , testParse "Simple expression 7" "(x : @ -> @)"
+        (Tag NoInfo (TFunc TTree TTree) (Var NoInfo (Name 0)))
+    , testParse "Simple expression 8" "< x y"
+        (App NoInfo (App NoInfo (Hd NoInfo) (Var NoInfo (Name 0)))
             (Var NoInfo (Name 1)))
     ]

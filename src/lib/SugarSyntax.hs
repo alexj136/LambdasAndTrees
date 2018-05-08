@@ -17,8 +17,8 @@ data Term
     | Fix  Info
     | Cond Info Term Term Term
     | Cons Info Term Term
-    | Hd   Info Term
-    | Tl   Info Term
+    | Hd   Info
+    | Tl   Info
     | Nil  Info
     | Tag  Info Type Term
     deriving (Eq, Ord)
@@ -35,8 +35,8 @@ instance Positionable Term where
         Fix  (PosInfo pos)           -> Just pos
         Cond (PosInfo pos) _ _ _     -> Just pos
         Cons (PosInfo pos) _ _       -> Just pos
-        Hd   (PosInfo pos) _         -> Just pos
-        Tl   (PosInfo pos) _         -> Just pos
+        Hd   (PosInfo pos)           -> Just pos
+        Tl   (PosInfo pos)           -> Just pos
         Nil  (PosInfo pos)           -> Just pos
         Tag  (PosInfo pos) _ _       -> Just pos
         _ -> Nothing
@@ -63,8 +63,8 @@ freeVars tm = case tm of
     Fix  _           -> S.empty
     Cond _ g t f     -> freeVars g `S.union` freeVars t `S.union` freeVars f
     Cons _ l r       -> freeVars l `S.union` freeVars r
-    Hd   _ e         -> freeVars e
-    Tl   _ e         -> freeVars e
+    Hd   _           -> S.empty
+    Tl   _           -> S.empty
     Nil  _           -> S.empty
     Tag  _ t b       -> freeVars b
 
@@ -110,8 +110,8 @@ instance PrettyPrint Term where
             Cons _ l r          ->
                 "(" ++ (pp (indent + 1) names l) ++ "."
                     ++ (pp (indent + 1) names r) ++ ")"
-            Hd   _ t            -> "(< " ++ (pp (indent + 1) names t) ++ ")"
-            Tl   _ t            -> "(> " ++ (pp (indent + 1) names t) ++ ")"
+            Hd   _              -> "<"
+            Tl   _              -> ">"
             Nil  _              -> "nil"
             Tag  _ t b          ->
                 "(" ++ (pp indent names b) ++ " : "
@@ -160,14 +160,10 @@ debugPrint = pp 0 where
             ++ pp (indent + 2) l
             ++ "\n" ++ tab (indent + 1) ++ "| RIGHT = "
             ++ pp (indent + 2) r
-        Hd   i t         ->
+        Hd   i           ->
             "\n" ++ tab indent ++ "| HEAD " ++ show i
-            ++ "\n" ++ tab (indent + 1) ++ "| ARGUMENT = "
-            ++ pp (indent + 2) t
-        Tl   i t         ->
+        Tl   i           ->
             "\n" ++ tab indent ++ "| TAIL " ++ show i
-            ++ "\n" ++ tab (indent + 1) ++ "| ARGUMENT = "
-            ++ pp (indent + 2) t
         Nil  i           ->
             "\n" ++ tab indent ++ "| NIL " ++ show i
         Tag  i t b       ->
@@ -195,8 +191,8 @@ desugar = let
         Cond _ g t f         ->
             liftM3 P.Cond (desug ns g) (desug ns t) (desug ns f)
         Cons _ l r           -> liftM2 P.Cons (desug ns l) (desug ns r)
-        Hd   _ t             -> liftM  P.Hd   (desug ns t)
-        Tl   _ t             -> liftM  P.Tl   (desug ns t)
+        Hd   _               -> return P.Hd
+        Tl   _               -> return P.Tl
         Nil  _               -> return P.Nil
         Tag  _ _ b           -> desug ns b
     in desug M.empty

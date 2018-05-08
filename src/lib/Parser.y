@@ -55,8 +55,8 @@ TERM
     | Let MREC Name MTY Eq TS In TS        { lt     $1 $2 $3 $4 $5 $6 $7 $8 }
     | Fix                                  { fix    $1                      }
     | LParen TS Dot TS RParen   %prec cons { cons   $1 $2 $3 $4 $5          }
-    | Hd TS                                { hd     $1 $2                   }
-    | Tl TS                                { tl     $1 $2                   }
+    | Hd                                   { hd     $1                      }
+    | Tl                                   { tl     $1                      }
     | Nil                                  { nil    $1                      }
     | LParen TS Colon TY RParen            { tag    $1 $2 $3 $4 $5          }
     | LParen TS RParen                     { parens $1 $2 $3                }
@@ -118,11 +118,11 @@ cons :: Token -> [Term] -> Token -> [Term] -> Token -> Term
 cons lpTk l dotTk r rpTk =
     Cons (maybe NoInfo PosInfo (lpTk `span` rpTk)) (tsToT l) (tsToT r)
 
-hd :: Token -> [Term] -> Term
-hd hdTk body = Hd (maybe NoInfo PosInfo (hdTk `span` body)) (tsToT body)
+hd :: Token -> Term
+hd (Token (pos, TK_Hd)) = Hd $ maybe NoInfo PosInfo pos
 
-tl :: Token -> [Term] -> Term
-tl tlTk body = Tl (maybe NoInfo PosInfo (tlTk `span` body)) (tsToT body)
+tl :: Token -> Term
+tl (Token (pos, TK_Tl)) = Tl $ maybe NoInfo PosInfo pos
 
 nil :: Token -> Term
 nil (Token (pos, TK_Nil)) = Nil $ maybe NoInfo PosInfo pos
